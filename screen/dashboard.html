@@ -240,6 +240,7 @@ async function stats() {
     ].slice(0, 6);
     $("home").innerHTML = rows.map(([n, st, ok]) => `<div class="row ${ok ? "" : "off"}"><span>${esc(n)}</span><span>${esc(st)}</span></div>`).join("");
     setActive(s.state.mode);
+    if (s.state.page && s.state.page !== lock) window.setPage(s.state.page);
   } catch (e) {}
 }
 
@@ -283,7 +284,7 @@ window.setMode = m => {
   setActive(m); focus = -1; paint(); document.body.classList.remove("remote");
 };
 window.remote = key => {
-  if (focus < 0 && mode === "dashboard" && (key === "left" || key === "right") && hasAgenda) {
+  if (focus < 0 && mode === "dashboard" && (key === "left" || key === "right") && (hasAgenda || lock !== "auto")) {
     return flip(key === "right" ? 1 : -1, true);   // dock hidden: left/right flip pages
   }
   document.body.classList.add("remote"); clearTimeout(remoteTimer);
@@ -353,16 +354,25 @@ async function agenda() {
     `<div class="note"><div class="title">${esc(n.name)}</div><div class="body">${esc(n.text)}</div></div>`).join("")
     || `<div class="empty">${a.wanted_notes.length ? "Notes not found: " + esc(a.wanted_notes.join(", ")) : "Pick notes to show in Settings."}</div>`;
 }
-function flip(dir, manual) {      // two pages, so either direction toggles
-  page = hasAgenda && page === 1 ? 2 : 1;
+let lock = "auto";                // "1" / "2" = locked on that page (remote's page switcher), "auto" = rotate
+function showPage(n) {
+  page = n;
   $("p1").classList.toggle("off", page !== 1); $("p2").classList.toggle("off", page !== 2);
   [...$("dots").children].forEach((d, i) => d.classList.toggle("on", i + 1 === page));
   sincePage = 0;
+}
+window.setPage = p => { lock = String(p); if (lock !== "auto") showPage(+lock); };
+function flip(dir, manual) {      // two pages, so either direction toggles
+  if (manual && lock !== "auto") {  // locked: the arrows move the lock
+    const to = page === 1 ? "2" : "1";
+    fetch("/api/page/" + to, {method: "POST"}); return window.setPage(to);
+  }
+  showPage(hasAgenda && page === 1 ? 2 : 1);
   if (manual) pausedUntil = Date.now() + 120000;   // a manual flip holds the page for 2 minutes
 }
 setInterval(() => {
   const every = +CFG.page_seconds || 0;
-  if (!every || !hasAgenda || mode !== "dashboard" || document.body.classList.contains("remote") || Date.now() < pausedUntil) return;
+  if (lock !== "auto" || !every || !hasAgenda || mode !== "dashboard" || document.body.classList.contains("remote") || Date.now() < pausedUntil) return;
   if (++sincePage >= every) flip(1, false);
 }, 1000);
 

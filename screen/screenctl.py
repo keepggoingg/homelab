@@ -24,6 +24,7 @@ HTTP API on :8090 (LAN + Tailscale only, via ufw):
   POST /api/mode/spotify      show the web player (to log in once with the laptop keyboard)
   GET  /api/claude            latest Claude Code session transcript (for the dashboard)
   POST /api/screen/<on|off>
+  POST /api/page/<1|2|auto>   dashboard page: 1 overview, 2 calendar (locked), auto = rotate
   GET  /api/volume            {volume 0..1, muted, sink} of the default audio output (PipeWire)
   POST /api/volume            value=0..1 or step=+-0.05;   POST /api/volume/mute  toggles mute
   GET  /api/config            dashboard settings (no secrets)
@@ -48,7 +49,7 @@ import hlconfig  # noqa: E402
 MEDIA = Path("/srv/media")
 SHELL, YT, SPOT = 9222, 9223, 9224
 WS = {"dashboard": 1, "fireplace": 1, "youtube": 2, "spotify": 4}
-STATE = {"mode": "dashboard", "playing": None, "screen": "on"}
+STATE = {"mode": "dashboard", "playing": None, "screen": "on", "page": "auto"}   # page: auto | 1 | 2
 # where to go back to when a cast / shared video ends (None = user chose YouTube, stay there)
 RETURN = {"to": None, "seen_watch": False, "idle_since": None}
 LOCK = threading.RLock()
@@ -190,6 +191,20 @@ def play(url):
             STATE["playing"] = url
         else:
             mpv_play(url)  # sway moves it to workspace 3
+
+
+def set_page(page):
+    """Lock the dashboard on page 1 / 2, or let it rotate. Browsers showing /dashboard follow via /api/stats."""
+    if page not in ("1", "2", "auto"):
+        raise ValueError("page must be 1, 2 or auto")
+    with LOCK:
+        STATE["page"] = page
+        try:
+            if STATE["mode"] != "dashboard":
+                set_mode("dashboard")
+            js(SHELL, f"setPage({json.dumps(page)})")   # the kiosk at once; others within 3 s
+        except Exception:
+            pass
 
 
 def stop():
@@ -781,6 +796,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send(200, volume_set(p.get("value"), p.get("step")))
             elif path == "/api/volume/mute":
                 return self.send(200, volume_mute())
+            elif path.startswith("/api/page/"):
+                set_page(path.rsplit("/", 1)[1])
             elif path == "/api/stop":
                 stop()
             elif path.startswith("/api/key/"):
