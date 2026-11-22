@@ -256,7 +256,7 @@ def http_status(url):
         def redirect_request(self, *a, **k):
             return None
     try:
-        r = urllib.request.build_opener(NoRedirect).open(urllib.request.Request(url, method="GET"), timeout=8)
+        r = urllib.request.build_opener(NoRedirect).open(urllib.request.Request(url, method="GET", headers={"User-Agent": "curl/8 homelab-doctor"}), timeout=8)
         return r.status, ""
     except urllib.error.HTTPError as e:
         return e.code, e.headers.get("Location", "")
