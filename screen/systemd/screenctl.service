@@ -1,7 +1,6 @@
 [Unit]
-Description=Built-in display controller (HTTP :8090)
-PartOf=sway-session.target
-After=sway-session.target
+Description=homelab web remote, settings and display control (HTTP :8090)
+After=network-online.target
 
 [Service]
 ExecStart=/usr/bin/python3 /srv/homelab/screen/screenctl.py
@@ -10,4 +9,5 @@ Restart=always
 RestartSec=3
 
 [Install]
-WantedBy=sway-session.target
+# boots with the user manager (enable lingering on headless boxes: sudo loginctl enable-linger $USER)
+WantedBy=default.target

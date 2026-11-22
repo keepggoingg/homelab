@@ -40,6 +40,9 @@ Machine-specific facts (hardware, IPs, accounts, devices) are in CLAUDE.private.
    (add `traefik.http.services.<name>.loadbalancer.server.port=<port>` if not 80).
 2. `bin/homelab apply` (links `.env`), check `curl -H "Host: <name>.$DOMAIN" localhost`.
 3. Commit + push. DNS is a wildcard, so no DNS change needed.
+- n8n: private on http://$HL_HOST:5678 always; on n8n.$DOMAIN only when CF_ACCESS_TEAM + CF_ACCESS_AUD are set
+  (config/compose.env gets derived values from lib/hlconfig.py `derived()`; apps' .env link to compose.env).
+- screenctl (:8090) is a boot-time user service, independent of the screen; it finds sway when it runs.
 - Everything under *.$DOMAIN is PUBLIC on the internet. Admin UIs must not be exposed without auth: put a
   Cloudflare Access app with an owner-only policy in front. n8n uses apps/n8n/hooks/cf-access-sso.js to turn a
   verified Cf-Access-Jwt-Assertion (CF_ACCESS_TEAM / CF_ACCESS_AUD) into an n8n session.

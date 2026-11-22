@@ -96,7 +96,7 @@ def ask(k, default):
 
 def link_envs():
     for d in projects():
-        link, target = d / ".env", os.path.relpath(c.ENV_FILE, d)
+        link, target = d / ".env", os.path.relpath(c.COMPOSE_ENV, d)
         if link.is_symlink():
             if os.readlink(link) == target:
                 continue
@@ -147,12 +147,34 @@ def setup(args):
     if updates:
         c.write_env(updates)
     link_envs()
+    install_web()
+    guide = c.ROOT / "apps/docs/site/guide/index.html"
+    if not guide.exists():
+        guide.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(c.ROOT / "apps/docs/starter/index.html", guide)
+        print(f"{OK} start page at http://{c.read_env().get('HL_HOST') or 'localhost'}/guide/ (edit {guide.relative_to(c.ROOT)})")
     if ok("docker", "info") and not ok("docker", "network", "inspect", "proxy"):
         if run(["docker", "network", "create", "proxy"]) == 0:
             print(f"{OK} created docker network proxy")
     render(quiet=True)
     print(f"\n{OK} wrote config/homelab.env" + paint("2", "  (settings token: grep ^SETTINGS_TOKEN= config/homelab.env)"))
     print(paint("1", "\nNext:") + "  bin/homelab doctor   then   bin/homelab apply\n")
+
+
+def install_web():
+    """screenctl: remote, settings and dashboard on :8090. A user service that starts at boot."""
+    units = Path.home() / ".config/systemd/user"
+    unit = units / "screenctl.service"
+    if not (unit.exists() or unit.is_symlink()):
+        units.mkdir(parents=True, exist_ok=True)
+        unit.symlink_to(c.ROOT / "screen/systemd/screenctl.service")
+    if not ok("systemctl", "--user", "daemon-reload"):
+        print(f"{WARN} systemctl --user unavailable: start the remote later with "
+              "systemctl --user enable --now screenctl")
+        return
+    if sh("systemctl", "--user", "is-enabled", "screenctl") != "enabled":
+        ok("systemctl", "--user", "enable", "--now", "screenctl")
+        print(f"{OK} remote + settings on http://{c.read_env().get('HL_HOST') or 'localhost'}:8090")
 
 
 def check(args=()):
@@ -172,6 +194,8 @@ def render(args=(), quiet=False):
     env, changed = c.read_env(), []
     if c.write_public_env(env):
         changed.append(c.PUBLIC_ENV)
+    if c.write_compose_env(env):
+        changed.append(c.COMPOSE_ENV)
     for tmpl, out, needs in TEMPLATES:
         if not all(env.get(k) for k in needs):
             continue
@@ -200,7 +224,7 @@ def apply(args=()):
 
 
 # ---------- screen ----------
-SCREEN_UNITS = ["sway-session.target", "screenctl.service", "kiosk-browser.service",
+SCREEN_UNITS = ["sway-session.target", "kiosk-browser.service",
                 "kiosk-youtube.service", "uxplay.service", "homekit.service"]
 
 
@@ -335,11 +359,19 @@ def doctor(args=()):
                 st, _ = http_status(f"https://hello.{domain}/")
                 r.line("ok" if st == 200 else "warn", f"https://hello.{domain} → {st or 'no answer'}",
                        "" if st == 200 else "check DNS: cloudflared tunnel route dns <tunnel> '*.DOMAIN'")
-        if env.get("CF_ACCESS_TEAM") and env.get("CF_ACCESS_AUD"):
-            r.line("ok", "n8n single sign-on through Cloudflare Access configured")
+        if c.access_protected(env):
+            st, loc = http_status(f"https://n8n.{domain}/")
+            if "cloudflareaccess.com" in loc:
+                r.line("ok", f"https://n8n.{domain} asks for a Cloudflare Access login")
+            elif st == 200:
+                r.line("bad", f"https://n8n.{domain} is OPEN without Cloudflare Access",
+                       f"Zero Trust > Access > Applications: add n8n.{domain} with an owner-only policy")
+            else:
+                r.line("warn", f"https://n8n.{domain} → {st or loc or 'no answer'}")
         else:
-            r.line("info", "n8n uses its own login (no CF_ACCESS_TEAM / CF_ACCESS_AUD)",
-                   "optional: Zero Trust > Access > Applications > add n8n.DOMAIN, copy its AUD tag")
+            r.line("info", f"n8n stays private (http://{env.get('HL_HOST') or 'localhost'}:5678) until Cloudflare Access is set",
+                   f"Zero Trust > Access > Applications > self-hosted n8n.{domain}, owner-only policy,\n"
+                   "then put the team name and the app's AUD tag in CF_ACCESS_TEAM / CF_ACCESS_AUD and apply")
         host = env.get("SCREEN_REMOTE_HOST", "")
         if host:
             st, loc = http_status(f"https://{host}/")
@@ -350,6 +382,20 @@ def doctor(args=()):
                        f"add a Cloudflare Access app for {host} now, or clear SCREEN_REMOTE_HOST and apply")
             else:
                 r.line("warn", f"https://{host} → {st or loc or 'no answer'}")
+
+    r.section("web remote & settings (:8090)")
+    st = sh("systemctl", "--user", "is-active", "screenctl")
+    r.line("ok" if st == "active" else "bad", f"screenctl {st or 'not installed'}",
+           "" if st == "active" else "bin/homelab setup   (installs it), logs: journalctl --user -u screenctl -n 30")
+    if st == "active":
+        up = ok("curl", "-sf", "-o", "/dev/null", "http://127.0.0.1:8090/api/config", timeout=5)
+        r.line("ok" if up else "bad", f"http://{env.get('HL_HOST') or 'localhost'}:8090 answers",
+               "" if up else "journalctl --user -u screenctl -n 30")
+    linger = sh("loginctl", "show-user", os.environ.get("USER", ""), "-p", "Linger", "--value") == "yes"
+    autologin = Path("/etc/systemd/system/getty@tty1.service.d/autologin.conf").exists()
+    r.line("ok" if linger or autologin else "warn",
+           "starts at boot" + (" (lingering)" if linger else " (tty1 auto-login)" if autologin else ": not until you log in"),
+           "" if linger or autologin else "sudo loginctl enable-linger $USER")
 
     r.section("this machine")
     ts = env.get("HL_TAILSCALE_IP", "")
@@ -386,7 +432,7 @@ def doctor(args=()):
 
     r.section("screen (optional)")
     units = Path.home() / ".config/systemd/user"
-    if not (units / "screenctl.service").exists():
+    if not (units / "kiosk-browser.service").exists():
         r.line("info", "built-in display not installed", "bin/homelab screen")
     else:
         need = {"sway": "sway", "chromium": "chromium (snap)", "mpv": "mpv", "yt-dlp": "yt-dlp",
@@ -400,7 +446,7 @@ def doctor(args=()):
         r.line("ok" if ws else "bad", "python3-websocket", "" if ws else "sudo apt install python3-websocket")
         al = Path("/etc/systemd/system/getty@tty1.service.d/autologin.conf").exists()
         r.line("ok" if al else "warn", "tty1 auto-login", "" if al else "bin/homelab screen   (prints the command)")
-        for u in ("screenctl", "kiosk-browser", "uxplay", "homekit"):
+        for u in ("kiosk-browser", "uxplay", "homekit"):
             st = sh("systemctl", "--user", "is-active", u)
             r.line("ok" if st == "active" else "warn", f"{u}: {st or 'unknown'}",
                    "" if st == "active" else f"journalctl --user -u {u} -n 30")
@@ -427,4 +473,5 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd not in COMMANDS:
         sys.exit(__doc__)
-    sys.exit(COMMANDS[cmd](sys.argv[2:]) or 0)
+    result = COMMANDS[cmd](sys.argv[2:])
+    sys.exit(1 if cmd == "check" and result else result if isinstance(result, int) else 0)

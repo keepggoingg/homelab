@@ -8,6 +8,8 @@ services:
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=proxy
       - --entrypoints.web.address=:80
+      - --entrypoints.web.asDefault=true
+      - --entrypoints.n8n-lan.address=:5678   # private n8n (see apps/n8n)
       - --api.dashboard=true
       - --ping=true
       - --log.level=INFO
@@ -16,6 +18,7 @@ services:
       - --providers.file.watch=true
     ports:
       - "80:80"
+      - "5678:5678"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./dynamic:/dynamic:ro

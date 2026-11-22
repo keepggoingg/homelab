@@ -73,7 +73,7 @@
     </div>
   </div>
   <div id="np-off" class="idle"><span>Nothing playing on Spotify</span><button data-a="mode/spotify">Open player</button></div>
-  <div class="vol">
+  <div class="vol" id="volrow">
     <button id="mute" aria-label="Mute">🔈</button>
     <input type="range" id="vol" min="0" max="100" step="1" value="0" aria-label="Volume">
     <button data-step="-0.05" aria-label="Volume down">−</button>
@@ -82,6 +82,7 @@
   <div class="vlabel"><span id="sink"></span><span id="vpct"></span></div>
 </section>
 
+<div id="screen-ui">
 <div class="grid">
   <button data-a="mode/dashboard">Dashboard</button>
   <button data-a="mode/fireplace">Fireplace</button>
@@ -91,6 +92,8 @@
   <button data-a="screen/off">Screen off</button>
 </div>
 <form id="f"><input id="url" type="url" placeholder="Video link" required><button>▶</button></form>
+</div>
+<p id="noscreen" hidden>No screen attached. The dashboard opens in any browser: <a href="/dashboard">/dashboard</a></p>
 <div id="msg"></div>
 <p style="margin-top:28px"><a href="/settings">Settings</a></p>
 <script>
@@ -110,6 +113,9 @@ async function call(path, body) {
 async function refresh() {
   try {
     const s = (await (await fetch("/api/stats")).json()).state;
+    $("screen-ui").hidden = s.display === false; $("noscreen").hidden = s.display !== false;
+    $("np-off").querySelector("button").hidden = s.display === false;
+    if (s.display === false) { $("state").textContent = "Headless: remote, volume and settings"; return; }
     $("state").textContent = "Mode: " + s.mode + (s.playing ? ", playing a video" : "") + ", screen " + s.screen;
     document.querySelectorAll("[data-a^=mode]").forEach(b => b.classList.toggle("on", b.dataset.a === "mode/" + s.mode));
   } catch (e) {}
@@ -135,6 +141,7 @@ document.querySelectorAll("[data-s]").forEach(b => b.onclick = async () => {
 /* volume */
 let dragging = false, sendTimer = 0;
 function showVol(v) {
+  $("volrow").hidden = $("sink").parentElement.hidden = v.volume == null;
   if (v.volume == null) return;
   const p = Math.round(v.volume * 100);
   if (!dragging) $("vol").value = p;

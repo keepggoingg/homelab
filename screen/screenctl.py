@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""screenctl: controls the homelab built-in display.
+"""screenctl: web remote, settings and display control for the homelab.
+
+Runs at boot as a user service, with or without a screen. Without one (headless box) you still get
+the remote page, settings, volume and the dashboard in any browser (/dashboard). When the sway
+kiosk session is running it also drives the built-in display:
 
 Nothing reloads when switching modes; each mode lives on its own sway workspace:
   ws 1  kiosk-shell    Chromium (CDP :9222) with /shell = dashboard + fireplace <video>
@@ -31,7 +35,10 @@ import hmac, json, os, re, shutil, socket, subprocess, sys, threading, time, url
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import websocket  # python3-websocket
+try:
+    import websocket  # python3-websocket, only needed to drive the kiosk browsers
+except ImportError:
+    websocket = None
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "lib"))
@@ -50,6 +57,8 @@ _mpv = None
 # ---------- Chromium via CDP ----------
 def cdp(port, *calls):
     """Run (method, params) pairs on the page of the Chromium at `port`; return last result."""
+    if websocket is None:
+        raise RuntimeError("python3-websocket is not installed")
     tabs = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=3))
     pages = [t for t in tabs if t.get("type") == "page"]
     # Chrome may add its own UI pages (chrome://signin-..., new tab); use the real web page
@@ -84,8 +93,25 @@ YT_PAUSE = "(()=>{const v=document.querySelector('video');if(v&&!v.paused)v.paus
 
 
 # ---------- sway ----------
+RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}")
+
+
+def display():
+    """True when the sway kiosk session runs. We start at boot, maybe before sway, so look up its
+    sockets each time instead of trusting the environment we were started with."""
+    socks = sorted(RUNTIME.glob("sway-ipc.*.sock"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not socks:
+        return False
+    os.environ["SWAYSOCK"] = str(socks[0])
+    wl = sorted(p.name for p in RUNTIME.glob("wayland-[0-9]") if p.is_socket())
+    if wl:
+        os.environ["WAYLAND_DISPLAY"] = wl[0]
+    return True
+
+
 def sway(cmd):
-    subprocess.run(["swaymsg", cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if display():
+        subprocess.run(["swaymsg", cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def overlay_open():
@@ -107,6 +133,8 @@ def mpv_stop():
 
 def mpv_play(url):
     global _mpv
+    if not display():
+        raise RuntimeError("no screen: the sway kiosk session is not running")
     mpv_stop()
     _mpv = subprocess.Popen(
         ["mpv", "--fs", "--no-terminal", "--force-window=immediate", "--input-ipc-server=" + MPV_SOCK,
@@ -218,6 +246,8 @@ def press(key):
 
 # ---------- background watchers ----------
 def tree_windows():
+    if not display():
+        return []
     out = subprocess.run(["swaymsg", "-r", "-t", "get_tree"], capture_output=True, text=True).stdout
     found = []
 
@@ -244,6 +274,9 @@ def watch_overlays():
     for con in tree_windows():
         place(con)
     while True:
+        if not display():
+            time.sleep(5)
+            continue
         p = subprocess.Popen(["swaymsg", "-m", "-r", "-t", "subscribe", '["window"]'],
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
         for line in p.stdout:
@@ -266,6 +299,8 @@ def watch_overlays():
 
 def reconcile():
     """Safety net for windows that appeared before we subscribed to sway events."""
+    if not display():
+        return
     for app, ws in (("kiosk-shell", 1), ("kiosk-youtube", 2), ("kiosk-spotify", 4)):
         out = subprocess.run(["swaymsg", f'[app_id="^{app}$" workspace="^(?!{ws}$)"] '
                               f"move container to workspace number {ws}, fullscreen enable"],
@@ -511,7 +546,7 @@ def stats():
         "containers": containers,
         "net": net_rate(),
         **PROBE,
-        "state": dict(STATE, overlay=overlay_open()),
+        "state": dict(STATE, overlay=overlay_open(), display=display()),
     }
 
 
@@ -693,7 +728,7 @@ if __name__ == "__main__":
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     threading.Thread(target=watch_overlays, daemon=True).start()
     threading.Thread(target=probe_loop, daemon=True).start()
-    for _ in range(60):  # the shell may have loaded before we were listening
+    for _ in range(60 if display() else 0):  # the shell may have loaded before we were listening
         try:
             cdp(SHELL, ("Page.navigate", {"url": "http://127.0.0.1:8090/shell"}))
             break

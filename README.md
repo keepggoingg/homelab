@@ -123,15 +123,25 @@ bin/homelab doctor    # checks everything; each ✗ comes with the command that 
 bin/homelab apply     # starts traefik and the apps
 ```
 
-That's a working base on your LAN: `curl -H 'Host: hello.localhost' localhost` answers.
+That's a working homelab on your LAN, no domain needed:
+
+| open | what |
+| --- | --- |
+| `http://<host>:8090` | remote: Spotify, volume, screen modes |
+| `http://<host>:8090/settings` | every setting, unlocked with the token `setup` generated |
+| `http://<host>:8090/dashboard` | the dashboard in any browser (an old tablet on the wall works great) |
+| `http://<host>:5678` | n8n: create your account right away |
+| `http://<host>/guide/` | your private start page |
+
 Everything after that is optional and `doctor` walks you through it:
 
 | want | do |
 | --- | --- |
 | apps on your own domain, no open ports | domain on Cloudflare → `bin/homelab setup --reconfigure`, then follow `doctor`'s tunnel steps |
 | reach it from anywhere, privately | install [Tailscale](https://tailscale.com/download/linux), `setup --reconfigure` picks up its IP |
-| the screen (dashboard, fireplace, YouTube, AirPlay) | `bin/homelab screen`, then the packages `doctor` lists |
+| the built-in screen (dashboard, fireplace, YouTube, AirPlay) | `bin/homelab screen`, then the packages `doctor` lists |
 | the Apple Home remote | the HAP-python venv `doctor` prints, then pair the "TV" in the Home app |
+| n8n on `n8n.<domain>` | Cloudflare Access app on it, then `CF_ACCESS_TEAM` + `CF_ACCESS_AUD` (until then n8n stays private: safe by default) |
 | the remote on the internet | Cloudflare Access app on `remote.<domain>` first, then set `SCREEN_REMOTE_HOST` |
 
 The repo lives in `/srv/homelab` because the systemd units point there; `doctor` tells you if it doesn't.

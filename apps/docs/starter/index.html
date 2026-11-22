@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>homelab</title>
+<style>
+  :root { --bg:#0e0d0b; --fg:#ece6da; --dim:#8b8478; --line:#2a2722; --tile:#171512; --warm:#e8a75b; }
+  * { box-sizing:border-box; }
+  body { margin:0 auto; max-width:720px; padding:48px 24px; background:var(--bg); color:var(--fg);
+         font:17px/1.55 -apple-system, "Noto Sans", sans-serif; }
+  h1 { font-size:30px; margin:0 0 6px; } h2 { font-size:15px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); margin:40px 0 12px; }
+  p { color:var(--dim); margin:0 0 16px; } code { font:14px ui-monospace, Menlo, monospace; color:var(--fg); }
+  a { color:var(--warm); text-decoration:none; } a:hover { text-decoration:underline; }
+  .links { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px; }
+  .links a { display:block; background:var(--tile); border:1px solid var(--line); border-radius:14px; padding:16px; color:var(--fg); }
+  .links a:hover { border-color:var(--warm); text-decoration:none; }
+  .links b { display:block; } .links span { color:var(--dim); font-size:14px; }
+  pre { background:var(--tile); border:1px solid var(--line); border-radius:12px; padding:14px 16px; overflow:auto; }
+</style>
+</head>
+<body>
+<h1>▍homelab</h1>
+<p>Your private start page. It is only served to the LAN and Tailscale, never on the public domain,
+so it's a good place for notes about IPs, devices and where things live.</p>
+
+<h2>open</h2>
+<div class="links">
+  <a data-port="8090" data-path="/"><b>Remote</b><span>modes, Spotify, volume</span></a>
+  <a data-port="8090" data-path="/settings"><b>Settings</b><span>dashboard + every config value</span></a>
+  <a data-port="8090" data-path="/dashboard"><b>Dashboard</b><span>the screen, in this browser</span></a>
+  <a data-port="5678" data-path="/"><b>n8n</b><span>automations</span></a>
+</div>
+
+<h2>make this page yours</h2>
+<p>Edit <code>apps/docs/site/guide/index.html</code>. It's gitignored in the public repo; keep it in
+your private overlay with <code>bin/private-git sync</code>. Ask Claude on the server to keep it up to date
+whenever the setup changes.</p>
+
+<h2>day to day</h2>
+<pre><code>bin/homelab doctor     # is everything fine? prints the fix for anything that isn't
+bin/homelab apply      # after changing config/homelab.env
+bin/homelab setup --reconfigure</code></pre>
+
+<script>
+for (const a of document.querySelectorAll("[data-port]"))
+  a.href = `${location.protocol}//${location.hostname}:${a.dataset.port}${a.dataset.path}`;
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Private docs (homelab guide). Reachable only by the laptop name / IPs over Tailscale or the LAN,
 # never on *.$DOMAIN, because a guide usually has private details (IPs, addresses).
-# Put the HTML in apps/docs/site/guide/ (gitignored).
+# apps/docs/site/guide/ is gitignored; `bin/homelab setup` starts it from apps/docs/starter/.
 services:
   docs:
     image: nginx:alpine

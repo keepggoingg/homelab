@@ -17,3 +17,4 @@ apps/docs/site/
 apps/n8n/workflows/
 apps/upwork-agent/
 private/
+config/compose.env
