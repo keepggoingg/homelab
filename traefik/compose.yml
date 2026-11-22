@@ -12,10 +12,17 @@ services:
       - --ping=true
       - --log.level=INFO
       - --accesslog=true
+      - --providers.file.directory=/dynamic
+      - --providers.file.watch=true
     ports:
       - "80:80"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./dynamic:/dynamic:ro
+    environment:
+      SCREEN_REMOTE_HOST: ${SCREEN_REMOTE_HOST:-}
+    extra_hosts:
+      - host.docker.internal:host-gateway
     networks: [proxy]
 networks:
   proxy:

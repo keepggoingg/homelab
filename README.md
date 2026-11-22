@@ -155,8 +155,9 @@ Needs `sway`, `chromium`, `mpv`, `yt-dlp`, `uxplay`, `python3-websocket`, and a 
 - **apply**: runs `bin/homelab apply`, which re-renders templates, restarts cloudflared if its config
   changed, and runs `docker compose up -d` everywhere (only changed containers are recreated).
 
-Port 8090 should only be reachable from the LAN or Tailscale (ufw), never through the tunnel unless
-Cloudflare Access is in front of it.
+Port 8090 is meant for the LAN and Tailscale (ufw). To reach the remote from anywhere, put a Cloudflare
+Access app on a hostname first, then set `SCREEN_REMOTE_HOST` to it and Apply: Traefik routes it to
+screenctl through `traefik/dynamic/screen-remote.yml`. Leave it empty and the route doesn't exist.
 
 <br>
 

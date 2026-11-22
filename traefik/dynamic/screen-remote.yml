@@ -1,0 +1,16 @@
+# Screen remote + settings (screenctl on the host, :8090) on a public hostname.
+# Off unless SCREEN_REMOTE_HOST is set in config/homelab.env. Set it ONLY after a
+# Cloudflare Access app protects that hostname: screenctl has no login of its own.
+{{ $host := env "SCREEN_REMOTE_HOST" }}
+{{ if $host }}
+http:
+  routers:
+    screen-remote:
+      rule: Host(`{{ $host }}`)
+      service: screenctl
+  services:
+    screenctl:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:8090
+{{ end }}

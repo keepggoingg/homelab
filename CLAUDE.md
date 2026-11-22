@@ -28,6 +28,8 @@ Machine-specific facts (hardware, IPs, accounts, devices) are in CLAUDE.private.
 - Web UI: `http://$HL_HOST:8090/settings` (token = SETTINGS_TOKEN). Save writes the files, Apply runs
   `bin/homelab apply`: re-render templates, restart cloudflared if its config changed,
   `docker compose up -d` for traefik and every app.
+- Screen remote on the internet: set SCREEN_REMOTE_HOST (e.g. remote.$DOMAIN) and Apply; traefik/dynamic/screen-remote.yml
+  routes it to screenctl :8090 (ufw allows the proxy network to 8090). Only with a Cloudflare Access app on that host first.
 - Never print secret values (`grep ^KEY= config/homelab.env` shows them; check with `[ -n "$KEY" ]` style tests).
 
 ## Deploy a new app
