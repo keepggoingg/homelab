@@ -57,10 +57,10 @@
 </style>
 </head>
 <body>
-<h1>Screen</h1>
+<h1 id="h">Screen</h1>
 <p id="state">…</p>
 
-<section class="np" aria-label="Now playing">
+<section class="np" id="np" aria-label="Now playing">
   <div id="np-on" hidden>
     <div class="np-top">
       <div class="cover" id="cover"></div>
@@ -95,7 +95,12 @@
 </div>
 <form id="f"><input id="url" type="url" placeholder="Video link" required><button>▶</button></form>
 </div>
-<p id="noscreen" hidden>No screen attached. The dashboard opens in any browser: <a href="/dashboard">/dashboard</a></p>
+<div id="noscreen" class="grid" hidden>
+  <button data-go="/dashboard">Dashboard</button>
+  <button data-go="/settings">Settings</button>
+  <button data-go=":5678">n8n</button>
+  <button data-go="/guide/" data-port="80">Start page</button>
+</div>
 <div id="msg"></div>
 <p style="margin-top:28px"><a href="/settings">Settings</a></p>
 <script>
@@ -115,9 +120,11 @@ async function call(path, body) {
 async function refresh() {
   try {
     const s = (await (await fetch("/api/stats")).json()).state;
-    $("screen-ui").hidden = s.display === false; $("noscreen").hidden = s.display !== false;
-    $("np-off").querySelector("button").hidden = s.display === false;
-    if (s.display === false) { $("state").textContent = "Headless: remote, volume and settings"; return; }
+    const headless = s.display === false;
+    $("screen-ui").hidden = headless; $("noscreen").hidden = !headless;
+    $("np").hidden = headless && !spot.active && $("volrow").hidden;   // nothing to control without screen or audio
+    $("h").textContent = headless ? HOST : "Screen";
+    if (headless) { $("state").textContent = "No screen attached · the dashboard opens in any browser"; return; }
     $("state").textContent = "Mode: " + s.mode + (s.playing ? ", playing a video" : "") + ", screen " + s.screen;
     document.querySelectorAll("[data-a^=mode]").forEach(b => b.classList.toggle("on", b.dataset.a === "mode/" + s.mode));
   } catch (e) {}
@@ -172,6 +179,10 @@ document.querySelectorAll("[data-step]").forEach(b => b.onclick = async () => sh
 $("mute").onclick = async () => showVol(await post("volume/mute"));
 
 document.querySelectorAll("[data-a]").forEach(b => b.onclick = () => call(b.dataset.a));
+document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => {
+  const g = b.dataset.go, port = g.startsWith(":") ? g.slice(1) : b.dataset.port;
+  location.href = port ? `${location.protocol}//${location.hostname}${port === "80" ? "" : ":" + port}${g.startsWith(":") ? "/" : g}` : g;
+});
 $("f").onsubmit = e => { e.preventDefault(); call("play", new URLSearchParams({url: $("url").value})); };
 refresh(); spotify(); volume();
 setInterval(refresh, 5000); setInterval(spotify, 2000); setInterval(volume, 3000);
