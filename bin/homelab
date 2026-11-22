@@ -154,7 +154,7 @@ def setup(args):
         shutil.copy(c.ROOT / "apps/docs/starter/index.html", guide)
         print(f"{OK} start page at http://{c.read_env().get('HL_HOST') or 'localhost'}/guide/ (edit {guide.relative_to(c.ROOT)})")
     if ok("docker", "info") and not ok("docker", "network", "inspect", "proxy"):
-        if run(["docker", "network", "create", "proxy"]) == 0:
+        if ok("docker", "network", "create", "proxy"):
             print(f"{OK} created docker network proxy")
     render(quiet=True)
     print(f"\n{OK} wrote config/homelab.env" + paint("2", "  (settings token: grep ^SETTINGS_TOKEN= config/homelab.env)"))
@@ -219,6 +219,8 @@ def apply(args=()):
     if cf in changed and Path("/etc/cloudflared/config.yml").exists():
         rc |= run(["sudo", "-n", "systemctl", "restart", "cloudflared"])
     for d in projects():
+        if (d / "prepare").exists():      # optional per-app hook: data folders, permissions
+            rc |= run([str(d / "prepare")])
         rc |= run(["docker", "compose", "up", "-d", "--remove-orphans"], cwd=d)
     sys.exit(rc)
 
@@ -326,8 +328,8 @@ def doctor(args=()):
         has_net = ok("docker", "network", "inspect", "proxy")
         r.line("ok" if has_net else "bad", "network proxy", "" if has_net else "docker network create proxy")
         running = set(sh("docker", "ps", "--format", "{{.Names}}").split())
-        r.line("ok" if "traefik" in running else "bad", "traefik running" if "traefik" in running
-               else "traefik not running", "" if "traefik" in running else "bin/homelab apply")
+        r.line("ok" if "traefik" in running else "warn", "traefik running" if "traefik" in running
+               else "traefik not running yet", "" if "traefik" in running else "bin/homelab apply")
 
     r.section("internet (Cloudflare)")
     if not domain:

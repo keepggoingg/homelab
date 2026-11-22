@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>homelab settings</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#0e0d0b">
+<title>Settings · homelab</title>
 <style>
   :root { --bg:#0e0d0b; --fg:#ece6da; --dim:#8b8478; --line:#2a2722; --field:#191714; --warm:#e8a75b; --bad:#e2725b; }
   * { box-sizing:border-box; }
@@ -103,6 +105,7 @@ function showLogin(err) {
 
 function render(d) {
   data = d;
+  fetch("/api/config").then(r => r.json()).then(c => { if (c.host) document.title = `Settings · ${c.host}`; }).catch(() => {});
   document.querySelectorAll("[data-d]").forEach(i => { i.value = d.dashboard[i.dataset.d] ?? ""; i.dataset.orig = i.value; i.classList.remove("changed"); });
   $("env").innerHTML = d.env.map(e => `
     <label><span class="k">${esc(e.key)}${e.secret ? `<span class="tag ${e.set ? "set" : ""}">${e.set ? "secret, set" : "secret, not set"}</span>` : ""}</span>

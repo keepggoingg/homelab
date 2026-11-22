@@ -484,6 +484,8 @@ SINK = "@DEFAULT_AUDIO_SINK@"
 
 
 def volume_state():
+    if not shutil.which("wpctl"):        # no PipeWire (headless box): no volume control
+        return {"volume": None, "muted": False, "sink": ""}
     out = subprocess.run(["wpctl", "get-volume", SINK], capture_output=True, text=True, timeout=5).stdout
     m = re.search(r"Volume:\s*([\d.]+)", out)
     name = ""
@@ -654,6 +656,8 @@ class H(BaseHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         if path == "/":
             return self.send(200, (HERE / "control.html").read_bytes(), "text/html")
+        if path == "/favicon.svg":
+            return self.send(200, (HERE / "favicon.svg").read_bytes(), "image/svg+xml")
         if path == "/settings":
             return self.send(200, (HERE / "settings.html").read_bytes(), "text/html")
         if path == "/api/config":

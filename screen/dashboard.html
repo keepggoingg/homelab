@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>homelab-shell</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#0e0d0b">
+<title>Dashboard · homelab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;500;700;800&display=swap" rel="stylesheet">
@@ -135,6 +137,7 @@ async function config() {
     const prev = JSON.stringify([CFG.latitude, CFG.longitude, CFG.timezone]);
     CFG = await (await fetch("/api/config")).json();
     $("wname").textContent = CFG.location_name || "Weather";
+    if (CFG.host) document.title = `Dashboard · ${CFG.host}`;
     if (JSON.stringify([CFG.latitude, CFG.longitude, CFG.timezone]) !== prev) weather();
   } catch (e) {}
 }

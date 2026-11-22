@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0e0d0b">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>homelab screen</title>
+<meta name="apple-mobile-web-app-title" content="Remote">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>Remote · homelab</title>
 <style>
   :root { --bg:#0e0d0b; --fg:#ece6da; --dim:#8b8478; --line:#2a2722; --tile:#171512; --warm:#e8a75b; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -121,10 +123,18 @@ async function refresh() {
   } catch (e) {}
 }
 
+/* tab title: the song while music plays, otherwise "Remote · <host>" */
+let HOST = "homelab";
+fetch("/api/config").then(r => r.json()).then(c => { HOST = c.host || HOST; title(); }).catch(() => {});
+function title() {
+  document.title = spot.active && spot.playing ? `▶ ${spot.title} · ${spot.artists}` : `Remote · ${HOST}`;
+}
+
 /* Spotify */
 let spot = {};
 async function spotify() {
   try { spot = await (await fetch("/api/spotify")).json(); } catch (e) { spot = {}; }
+  title();
   $("np-on").hidden = !spot.active; $("np-off").hidden = !!spot.active;
   if (!spot.active) return;
   $("cover").style.backgroundImage = spot.cover ? `url("${spot.cover.replace(/"/g, "")}")` : "none";

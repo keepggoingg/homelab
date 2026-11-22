@@ -1,0 +1,10 @@
+#!/bin/sh
+# Run by `bin/homelab apply` before `docker compose up`. n8n runs as uid 1000 inside its container;
+# a data folder that Docker creates on its own is owned by root and n8n then can't start (EACCES).
+set -e
+cd "$(dirname "$0")"
+mkdir -p data/n8n
+if [ "$(stat -c %u data/n8n)" != 1000 ]; then
+  docker run --rm -v "$PWD/data/n8n:/d" busybox chown -R 1000:1000 /d
+  echo "n8n: data/n8n owned by uid 1000"
+fi
