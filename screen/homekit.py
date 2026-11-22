@@ -3,7 +3,7 @@
 
 Shows up in the Apple Home app as a TV:
   power        -> screen on/off
-  inputs       -> Dashboard / Fireplace / YouTube
+  inputs       -> Dashboard (rotating pages) / Fireplace / YouTube / Calendar (dashboard locked on page 2)
   Remote (Control Centre) -> arrows/select/back/play-pause via screenctl
                              (play/pause drives Spotify while the dashboard or fireplace is on)
   iPhone volume buttons    -> speaker volume, while the Remote is open (TelevisionSpeaker)
@@ -18,7 +18,9 @@ from pyhap.const import CATEGORY_TELEVISION
 
 API = "http://127.0.0.1:8090/api/"
 STATE_DIR = Path.home() / ".local/state/homekit"
-INPUTS = [("Dashboard", "dashboard"), ("Fireplace", "fireplace"), ("YouTube", "youtube")]
+# (name, screenctl action). Append only: HomeKit remembers inputs by their position (Identifier).
+INPUTS = [("Dashboard", "page/auto"), ("Fireplace", "mode/fireplace"), ("YouTube", "mode/youtube"),
+          ("Calendar", "page/2")]
 # HAP RemoteKey values -> screenctl keys
 REMOTE = {4: "up", 5: "down", 6: "left", 7: "right", 8: "select", 9: "back", 10: "home", 11: "playpause", 15: "home"}
 
@@ -67,7 +69,7 @@ class Display(Accessory):
         api("screen/" + ("on" if value else "off"))
 
     def set_input(self, value):
-        api("mode/" + INPUTS[value - 1][1])
+        api(INPUTS[value - 1][1])
 
     def volume_step(self, value):
         api("volume", body={"step": 0.05 if value == 0 else -0.05})   # 0 = increment, 1 = decrement
@@ -89,7 +91,10 @@ class Display(Accessory):
             log.debug("stats failed: %s", e)
             return
         active = 1 if s["screen"] == "on" else 0
-        ident = next((i for i, (_, m) in enumerate(INPUTS, 1) if m == s["mode"]), 1)
+        if s["mode"] == "dashboard":
+            ident = 4 if s.get("page") == "2" else 1
+        else:
+            ident = next((i for i, (_, a) in enumerate(INPUTS, 1) if a == "mode/" + s["mode"]), 1)
         if self.active.value != active:
             self.active.set_value(active)
         if self.input.value != ident:
