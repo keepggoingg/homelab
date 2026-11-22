@@ -19,6 +19,8 @@ Machine-specific facts (hardware, IPs, accounts, devices) are in CLAUDE.private.
 - `apps/<name>/compose.yml` one folder per project.
 
 ## Configuration
+- `bin/homelab doctor` checks the whole setup (docker, tunnel, Access, firewall, screen) and prints fixes.
+  Run it after changes and when something looks off. `bin/homelab setup --reconfigure` re-asks values.
 - `config/homelab.env` (gitignored, mode 600): infra values and secrets. Every key is documented in
   `config/homelab.env.example`; a new key goes in the example too (`# secret` line above it if it is one).
 - Each compose project's `.env` is a symlink to it (`bin/homelab setup` creates them), so compose files

@@ -2,7 +2,7 @@
 
 Both files are gitignored. config/homelab.env.example documents every key:
   # Help text for the key (one or more comment lines right above it)
-  # secret        <- marks the key as a secret: never sent back to the browser
+  # secret | generate | optional | detect: <what> | example: <value>   (markers, see the example)
   KEY=default
 """
 import json, os, re, string, tempfile
@@ -53,7 +53,8 @@ def read_env(path=ENV_FILE):
 
 
 def schema():
-    """Keys documented in the example file, in order: [{key, default, help, secret}]."""
+    """Keys documented in the example file, in order:
+    [{key, default, help, secret, generate, optional, detect, example}]."""
     out, comments = [], []
     for line in ENV_EXAMPLE.read_text().splitlines():
         s = line.strip()
@@ -62,9 +63,19 @@ def schema():
             continue
         m = KEY_RE.match(s)
         if m:
-            secret = "secret" in comments
-            help_ = " ".join(c for c in comments if c and c != "secret")
-            out.append({"key": m.group(1), "default": _unquote(m.group(2)), "help": help_, "secret": secret})
+            k = {"key": m.group(1), "default": _unquote(m.group(2)), "secret": False, "generate": False,
+                 "optional": False, "detect": "", "example": ""}
+            help_ = []
+            for c in comments:
+                if c in ("secret", "generate", "optional"):
+                    k[c] = True
+                elif c.startswith(("detect:", "example:")):
+                    name, _, val = c.partition(":")
+                    k[name] = val.strip()
+                elif c:
+                    help_.append(c)
+            k["help"] = " ".join(help_)
+            out.append(k)
         comments = []
     return out
 

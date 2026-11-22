@@ -1,25 +1,97 @@
 #!/usr/bin/env python3
-"""homelab: config helper.
+"""homelab: set up, check and apply the homelab configuration.
 
-  bin/homelab setup     create config/homelab.env from the example (keeps existing values),
-                        generate SETTINGS_TOKEN, link every compose project's .env to it, render
-  bin/homelab render    fill templates (cloudflared/config.yml, config/public.env) from config/homelab.env
-  bin/homelab apply     render, restart cloudflared if its config changed, `docker compose up -d`
+  bin/homelab setup [--yes] [--reconfigure]
+        Wizard: detects this machine (hostname, IPs, interface, time zone, tunnel), asks for the rest,
+        generates secrets, writes config/homelab.env, creates the docker network, links each app's .env.
+        --yes accepts detected values without asking; --reconfigure asks again for keys already set.
+  bin/homelab doctor    check everything; every problem comes with the command that fixes it
+  bin/homelab apply     render configs, restart cloudflared if its config changed, `docker compose up -d`
                         for traefik and every apps/<name> (only changed containers are recreated)
-  bin/homelab check     list keys that are documented but empty
+  bin/homelab screen    install the built-in display: link systemd units, sway config, tty1 autostart
+  bin/homelab render    only render templates (cloudflared/config.yml, config/public.env)
+  bin/homelab check     list required keys that are still empty
 """
-import os, secrets, subprocess, sys
+import json, os, re, secrets, shutil, socket, subprocess, sys, urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import hlconfig as c  # noqa: E402
 
-TEMPLATES = [(c.ROOT / "cloudflared/config.yml.tmpl", c.ROOT / "cloudflared/config.yml")]
+EXPECTED_ROOT = Path("/srv/homelab")      # the systemd units refer to this path
+TTY = sys.stdout.isatty()
+paint = (lambda code, s: f"\033[{code}m{s}\033[0m") if TTY else (lambda code, s: s)
+OK, BAD, WARN, INFO = paint("32", "✓"), paint("31", "✗"), paint("33", "!"), paint("2", "·")
+
+
+# ---------- helpers ----------
+def sh(*cmd, timeout=10):
+    """stdout of a command, or "" if it is missing / fails."""
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def ok(*cmd, timeout=10):
+    try:
+        return subprocess.run(cmd, capture_output=True, timeout=timeout).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def run(cmd, **kw):
+    print(paint("2", "$ " + " ".join(cmd)), flush=True)
+    return subprocess.run(cmd, **kw).returncode
 
 
 def projects():
     dirs = [c.ROOT / "traefik"] + sorted(p.parent for p in (c.ROOT / "apps").glob("*/compose.yml"))
     return [d for d in dirs if (d / "compose.yml").exists()]
+
+
+# ---------- detection ----------
+def _route():
+    try:
+        r = json.loads(sh("ip", "-j", "route", "get", "1.1.1.1") or "[]")
+        return r[0] if r else {}
+    except ValueError:
+        return {}
+
+
+def _cf_tunnel():
+    ids = [p.stem for p in Path("/etc/cloudflared").glob("*.json")
+           if re.fullmatch(r"[0-9a-f-]{36}", p.stem)]
+    return ids[0] if len(ids) == 1 else ""
+
+
+def _timezone():
+    tz = sh("timedatectl", "show", "-p", "Timezone", "--value")
+    if not tz and Path("/etc/localtime").is_symlink():
+        tz = os.readlink("/etc/localtime").partition("zoneinfo/")[2]
+    return tz
+
+
+DETECT = {
+    "hostname": lambda: socket.gethostname().split(".")[0],
+    "lan_ip": lambda: _route().get("prefsrc", ""),
+    "lan_iface": lambda: _route().get("dev", ""),
+    "tailscale_ip": lambda: sh("tailscale", "ip", "-4").splitlines()[0] if sh("tailscale", "ip", "-4") else "",
+    "timezone": _timezone,
+    "cf_tunnel": _cf_tunnel,
+}
+
+
+# ---------- setup ----------
+def ask(k, default):
+    hint = f"[{default}] " if default else paint("2", f"(e.g. {k['example']}) ") if k["example"] else ""
+    tag = paint("2", " (optional, Enter skips)") if k["optional"] and not default else ""
+    print(f"\n{paint('1', k['key'])}{tag}  {paint('2', k['help'])}")
+    try:
+        v = input(f"  {paint('36', '›')} {hint}").strip()
+    except EOFError:
+        v = ""
+    return v or default
 
 
 def link_envs():
@@ -31,63 +103,92 @@ def link_envs():
             link.unlink()
         elif link.exists():
             # an app-local .env from before: fold its keys in (existing homelab.env values win)
-            old = c.read_env(link)
-            have = c.read_env()
+            old, have = c.read_env(link), c.read_env()
             c.write_env({k: v for k, v in old.items() if not have.get(k)})
             merged = c.read_env()
             missing = [k for k, v in old.items() if merged.get(k) != v and not have.get(k)]
             if missing:
                 sys.exit(f"{link}: could not merge {missing}, left in place")
             link.unlink()
-            print(f"merged {link.relative_to(c.ROOT)} into config/homelab.env")
+            print(f"{OK} merged {link.relative_to(c.ROOT)} into config/homelab.env")
         link.symlink_to(target)
-        print(f"linked {link.relative_to(c.ROOT)} -> {target}")
 
 
-def setup():
-    have = c.read_env()
-    fill = {k["key"]: k["default"] for k in c.schema() if k["key"] not in have}
-    if not have.get("SETTINGS_TOKEN"):
-        fill["SETTINGS_TOKEN"] = secrets.token_urlsafe(24)
-        print("generated SETTINGS_TOKEN (read it with: grep ^SETTINGS_TOKEN= config/homelab.env)")
-    if fill or not c.ENV_FILE.exists():
-        c.write_env(fill)
+def setup(args):
+    yes, again = "--yes" in args, "--reconfigure" in args
+    interactive = sys.stdin.isatty() and not yes
+    if not c.ENV_FILE.exists():
+        c.ENV_FILE.parent.mkdir(exist_ok=True)
+        c.ENV_FILE.write_text(c.ENV_EXAMPLE.read_text())
+        c.ENV_FILE.chmod(0o600)
+    have, updates = c.read_env(), {}
+    print(paint("1", "homelab setup") + paint("2", f"  ·  {c.ENV_FILE.relative_to(c.ROOT)}"
+          + ("  ·  Enter accepts [suggestion], '-' clears" if interactive else "")))
+    skip_internet = False
+    for k in c.schema():
+        key, cur = k["key"], have.get(k["key"], "")
+        if k["generate"]:
+            if not cur:
+                updates[key] = secrets.token_urlsafe(32)
+                print(f"{OK} {key}: generated")
+            continue
+        if key in ("CF_TUNNEL_ID", "CF_ACCESS_TEAM", "CF_ACCESS_AUD", "SCREEN_REMOTE_HOST") and skip_internet:
+            continue
+        if cur and not again:
+            continue
+        default = cur or (DETECT[k["detect"]]() if k["detect"] in DETECT else "") or k["default"]
+        v = ask(k, default) if interactive else default
+        v = "" if v == "-" else v
+        if v != cur:
+            updates[key] = v
+        if key == "DOMAIN" and not v:
+            skip_internet = True
+            print(paint("2", "  no domain: skipping the Cloudflare questions (run setup --reconfigure later)"))
+    if updates:
+        c.write_env(updates)
     link_envs()
-    empty = check(quiet=True)
-    if empty:
-        print("still empty:", ", ".join(empty))
-    render()
+    if ok("docker", "info") and not ok("docker", "network", "inspect", "proxy"):
+        if run(["docker", "network", "create", "proxy"]) == 0:
+            print(f"{OK} created docker network proxy")
+    render(quiet=True)
+    print(f"\n{OK} wrote config/homelab.env" + paint("2", "  (settings token: grep ^SETTINGS_TOKEN= config/homelab.env)"))
+    print(paint("1", "\nNext:") + "  bin/homelab doctor   then   bin/homelab apply\n")
 
 
-def check(quiet=False):
+def check(args=()):
     env = c.read_env()
-    empty = [k["key"] for k in c.schema() if not env.get(k["key"])]
-    if not quiet:
-        print("all keys set" if not empty else "empty: " + ", ".join(empty))
+    empty = [k["key"] for k in c.schema() if not k["optional"] and not env.get(k["key"])]
+    print(f"{OK} all required keys set" if not empty else f"{BAD} empty: " + ", ".join(empty))
     return empty
 
 
-def render():
+# ---------- render / apply ----------
+TEMPLATES = [  # (template, output, keys that must be set; otherwise the output is skipped)
+    (c.ROOT / "cloudflared/config.yml.tmpl", c.ROOT / "cloudflared/config.yml", ("DOMAIN", "CF_TUNNEL_ID")),
+]
+
+
+def render(args=(), quiet=False):
     env, changed = c.read_env(), []
     if c.write_public_env(env):
         changed.append(c.PUBLIC_ENV)
-        print("rendered config/public.env")
-    for tmpl, out in TEMPLATES:
+    for tmpl, out, needs in TEMPLATES:
+        if not all(env.get(k) for k in needs):
+            continue
         try:
             if c.render(tmpl, out, env):
                 changed.append(out)
-                print(f"rendered {out.relative_to(c.ROOT)}")
         except KeyError as e:
             sys.exit(f"{tmpl.relative_to(c.ROOT)}: {e.args[0]} is not set in config/homelab.env")
+    if not quiet:
+        for f in changed:
+            print(f"{OK} rendered {f.relative_to(c.ROOT)}")
     return changed
 
 
-def run(cmd, **kw):
-    print("$", " ".join(cmd), flush=True)
-    return subprocess.run(cmd, **kw).returncode
-
-
-def apply():
+def apply(args=()):
+    if not c.ENV_FILE.exists():
+        sys.exit(f"{BAD} no config yet: run bin/homelab setup")
     link_envs()
     changed, rc = render(), 0
     cf = c.ROOT / "cloudflared/config.yml"
@@ -98,6 +199,232 @@ def apply():
     sys.exit(rc)
 
 
+# ---------- screen ----------
+SCREEN_UNITS = ["sway-session.target", "screenctl.service", "kiosk-browser.service",
+                "kiosk-youtube.service", "uxplay.service", "homekit.service"]
+
+
+def screen(args=()):
+    home = Path.home()
+    units = home / ".config/systemd/user"
+    units.mkdir(parents=True, exist_ok=True)
+    for u in SCREEN_UNITS:
+        dst = units / u
+        if not dst.exists():
+            dst.symlink_to(c.ROOT / "screen/systemd" / u)
+            print(f"{OK} linked {dst}")
+    sway = home / ".config/sway/config"
+    if not sway.exists():
+        sway.parent.mkdir(parents=True, exist_ok=True)
+        sway.symlink_to(c.ROOT / "screen/sway.config")
+        print(f"{OK} linked {sway}")
+    prof = home / ".bash_profile"
+    snippet = (c.ROOT / "screen/bash_profile.snippet").read_text()
+    if "exec sway" not in (prof.read_text() if prof.exists() else ""):
+        with prof.open("a") as f:
+            f.write("\n" + snippet)
+        print(f"{OK} added the tty1 sway autostart to {prof}")
+    run(["systemctl", "--user", "daemon-reload"])
+    run(["systemctl", "--user", "enable", "homekit.service"])
+    user = os.environ.get("USER", "")
+    print(paint("1", "\nOne step needs root") + " (auto-login on tty1, so the screen starts after boot):")
+    print(f"  sed 's/YOUR_USER/{user}/' {c.ROOT}/screen/autologin.conf | "
+          "sudo install -D -m644 /dev/stdin /etc/systemd/system/getty@tty1.service.d/autologin.conf")
+    print("Then reboot, or log in on the laptop's own keyboard. `bin/homelab doctor` checks the rest.")
+
+
+# ---------- doctor ----------
+class Report:
+    def __init__(self):
+        self.bad = self.warn = 0
+
+    def section(self, name):
+        print("\n" + paint("1", name))
+
+    def line(self, state, text, fix=""):
+        mark = {"ok": OK, "bad": BAD, "warn": WARN, "info": INFO}[state]
+        self.bad += state == "bad"
+        self.warn += state == "warn"
+        print(f"  {mark} {text}")
+        for f in [f for f in fix.splitlines() if f]:
+            print("      " + paint("36", f))
+
+
+def http_status(url):
+    """(status, location) without following redirects."""
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+    try:
+        r = urllib.request.build_opener(NoRedirect).open(urllib.request.Request(url, method="GET"), timeout=8)
+        return r.status, ""
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers.get("Location", "")
+    except Exception as e:
+        return 0, str(e)
+
+
+def doctor(args=()):
+    r, env = Report(), c.read_env()
+    domain = env.get("DOMAIN", "")
+
+    r.section("repo & config")
+    if c.ROOT == EXPECTED_ROOT:
+        r.line("ok", f"repo at {c.ROOT}")
+    else:
+        r.line("warn", f"repo is at {c.ROOT}; the systemd units expect {EXPECTED_ROOT}",
+               f"sudo mv {c.ROOT} {EXPECTED_ROOT}   (or: sudo ln -s {c.ROOT} {EXPECTED_ROOT})")
+    if not c.ENV_FILE.exists():
+        r.line("bad", "config/homelab.env missing", "bin/homelab setup")
+    else:
+        empty = [k["key"] for k in c.schema() if not k["optional"] and not env.get(k["key"])]
+        r.line("bad" if empty else "ok", "required keys: " + (", ".join(empty) + " empty" if empty else "all set"),
+               "bin/homelab setup" if empty else "")
+        mode = c.ENV_FILE.stat().st_mode & 0o777
+        r.line("ok" if mode == 0o600 else "warn", f"config/homelab.env mode {mode:o}",
+               "" if mode == 0o600 else "chmod 600 config/homelab.env")
+        unlinked = [str(d.relative_to(c.ROOT)) for d in projects() if not (d / ".env").is_symlink()]
+        r.line("bad" if unlinked else "ok", "every app's .env links to it" if not unlinked else
+               "not linked: " + ", ".join(unlinked), "bin/homelab setup" if unlinked else "")
+
+    r.section("docker")
+    if not shutil.which("docker"):
+        r.line("bad", "docker not installed", "sudo apt install docker.io docker-compose-v2\n"
+               "sudo usermod -aG docker $USER   # then log out and back in")
+    elif not ok("docker", "info"):
+        r.line("bad", "can't talk to the docker daemon", "sudo systemctl enable --now docker\n"
+               "sudo usermod -aG docker $USER   # then log out and back in")
+    else:
+        r.line("ok", "docker " + sh("docker", "version", "-f", "{{.Server.Version}}"))
+        v = sh("docker", "compose", "version", "--short")
+        r.line("ok" if v else "bad", f"compose v2 {v}" if v else "docker compose (v2) missing",
+               "" if v else "sudo apt install docker-compose-v2")
+        has_net = ok("docker", "network", "inspect", "proxy")
+        r.line("ok" if has_net else "bad", "network proxy", "" if has_net else "docker network create proxy")
+        running = set(sh("docker", "ps", "--format", "{{.Names}}").split())
+        r.line("ok" if "traefik" in running else "bad", "traefik running" if "traefik" in running
+               else "traefik not running", "" if "traefik" in running else "bin/homelab apply")
+
+    r.section("internet (Cloudflare)")
+    if not domain:
+        r.line("info", "no DOMAIN: everything stays on the LAN / Tailscale",
+               "to publish apps: buy/move a domain to Cloudflare, then bin/homelab setup --reconfigure")
+    else:
+        tid = env.get("CF_TUNNEL_ID", "")
+        if not shutil.which("cloudflared"):
+            r.line("bad", "cloudflared not installed",
+                   "https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
+        elif not tid:
+            r.line("bad", "no tunnel yet (CF_TUNNEL_ID empty)",
+                   f"cloudflared tunnel login\ncloudflared tunnel create {env.get('HL_HOST') or 'homelab'}\n"
+                   f"cloudflared tunnel route dns {env.get('HL_HOST') or 'homelab'} {domain}\n"
+                   f"cloudflared tunnel route dns {env.get('HL_HOST') or 'homelab'} '*.{domain}'\n"
+                   f"sudo cp ~/.cloudflared/<id>.json /etc/cloudflared/   then: bin/homelab setup --reconfigure")
+        else:
+            creds = Path(f"/etc/cloudflared/{tid}.json").exists()
+            r.line("ok" if creds else "bad", f"tunnel {tid[:8]}… credentials in /etc/cloudflared",
+                   "" if creds else f"sudo cp ~/.cloudflared/{tid}.json /etc/cloudflared/")
+            link = Path("/etc/cloudflared/config.yml")
+            linked = link.is_symlink() and Path(os.readlink(link)) == c.ROOT / "cloudflared/config.yml"
+            r.line("ok" if linked else "bad", "/etc/cloudflared/config.yml links to the rendered config",
+                   "" if linked else f"bin/homelab render && sudo ln -sf {c.ROOT}/cloudflared/config.yml {link}")
+            active = sh("systemctl", "is-active", "cloudflared") == "active"
+            r.line("ok" if active else "bad", "cloudflared service " + ("active" if active else "not running"),
+                   "" if active else "sudo cloudflared service install && sudo systemctl enable --now cloudflared")
+            if active:
+                st, _ = http_status(f"https://hello.{domain}/")
+                r.line("ok" if st == 200 else "warn", f"https://hello.{domain} → {st or 'no answer'}",
+                       "" if st == 200 else "check DNS: cloudflared tunnel route dns <tunnel> '*.DOMAIN'")
+        if env.get("CF_ACCESS_TEAM") and env.get("CF_ACCESS_AUD"):
+            r.line("ok", "n8n single sign-on through Cloudflare Access configured")
+        else:
+            r.line("info", "n8n uses its own login (no CF_ACCESS_TEAM / CF_ACCESS_AUD)",
+                   "optional: Zero Trust > Access > Applications > add n8n.DOMAIN, copy its AUD tag")
+        host = env.get("SCREEN_REMOTE_HOST", "")
+        if host:
+            st, loc = http_status(f"https://{host}/")
+            if "cloudflareaccess.com" in loc:
+                r.line("ok", f"https://{host} asks for a Cloudflare Access login")
+            elif st == 200:
+                r.line("bad", f"https://{host} is OPEN to the internet without login",
+                       f"add a Cloudflare Access app for {host} now, or clear SCREEN_REMOTE_HOST and apply")
+            else:
+                r.line("warn", f"https://{host} → {st or loc or 'no answer'}")
+
+    r.section("this machine")
+    ts = env.get("HL_TAILSCALE_IP", "")
+    if shutil.which("tailscale"):
+        cur = sh("tailscale", "ip", "-4").splitlines()
+        cur = cur[0] if cur else ""
+        r.line("ok" if cur and cur == ts else "warn", f"tailscale {cur or 'down'}" + ("" if cur == ts else f" (config says {ts or 'nothing'})"),
+               "" if cur == ts else "bin/homelab setup --reconfigure")
+    else:
+        r.line("info", "tailscale not installed (optional: remote access without the internet)",
+               "curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up")
+    lan = env.get("HL_LAN_IP", "")
+    if lan and lan != _route().get("prefsrc"):
+        r.line("warn", f"LAN IP changed: config {lan}, now {_route().get('prefsrc')}",
+               "bin/homelab setup --reconfigure   (and reserve the IP in your router)")
+    elif lan:
+        r.line("ok", f"LAN IP {lan}")
+    if shutil.which("ufw"):
+        st = sh("sudo", "-n", "ufw", "status")
+        if not st:
+            r.line("info", "ufw: run doctor with sudo rights to check the firewall")
+        elif "inactive" in st:
+            r.line("warn", "ufw inactive: every port is open on the LAN",
+                   "sudo ufw allow from <lan>/24 to any port 22,80,8090 proto tcp && sudo ufw enable")
+        else:
+            has = re.search(r"^8090/tcp\s+ALLOW", st, re.M)
+            r.line("ok" if has else "warn", "ufw active" + ("" if has else ", 8090 (remote) not allowed"),
+                   "" if has else "sudo ufw allow from <lan>/24 to any port 8090 proto tcp")
+            if env.get("SCREEN_REMOTE_HOST"):
+                sub = sh("docker", "network", "inspect", "proxy", "-f", "{{range .IPAM.Config}}{{.Subnet}}{{end}}")
+                has = sub and sub in st
+                r.line("ok" if has else "bad", "traefik may reach screenctl (8090 from the proxy network)",
+                       "" if has else f"sudo ufw allow from {sub or '<proxy subnet>'} to any port 8090 proto tcp")
+
+    r.section("screen (optional)")
+    units = Path.home() / ".config/systemd/user"
+    if not (units / "screenctl.service").exists():
+        r.line("info", "built-in display not installed", "bin/homelab screen")
+    else:
+        need = {"sway": "sway", "chromium": "chromium (snap)", "mpv": "mpv", "yt-dlp": "yt-dlp",
+                "uxplay": "uxplay", "grim": "grim"}
+        missing = [n for b, n in need.items() if not shutil.which(b) and not Path(f"/snap/bin/{b}").exists()]
+        r.line("bad" if missing else "ok", "packages" + (": missing " + ", ".join(missing) if missing else ""),
+               "sudo apt install sway mpv uxplay grim && sudo snap install chromium\n"
+               "sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp "
+               "&& sudo chmod +x /usr/local/bin/yt-dlp" if missing else "")
+        ws = ok("python3", "-c", "import websocket")
+        r.line("ok" if ws else "bad", "python3-websocket", "" if ws else "sudo apt install python3-websocket")
+        al = Path("/etc/systemd/system/getty@tty1.service.d/autologin.conf").exists()
+        r.line("ok" if al else "warn", "tty1 auto-login", "" if al else "bin/homelab screen   (prints the command)")
+        for u in ("screenctl", "kiosk-browser", "uxplay", "homekit"):
+            st = sh("systemctl", "--user", "is-active", u)
+            r.line("ok" if st == "active" else "warn", f"{u}: {st or 'unknown'}",
+                   "" if st == "active" else f"journalctl --user -u {u} -n 30")
+        hk = Path.home() / ".local/share/homekit-venv/bin/python"
+        r.line("ok" if hk.exists() else "info", "HomeKit remote venv" + ("" if hk.exists() else " missing (optional)"),
+               "" if hk.exists() else "python3 -m venv ~/.local/share/homekit-venv && "
+               "~/.local/share/homekit-venv/bin/pip install HAP-python")
+        fire = Path("/srv/media/fireplace.mp4").exists()
+        r.line("ok" if fire else "info", "fireplace video" + ("" if fire else ": put a looping /srv/media/fireplace.mp4"))
+
+    print()
+    if r.bad:
+        print(paint("31", f"{r.bad} problem(s)") + (f", {r.warn} warning(s)" if r.warn else "") + ": run the commands above, then doctor again.")
+    elif r.warn:
+        print(paint("33", f"{r.warn} warning(s)") + ", nothing blocking. Next: bin/homelab apply")
+    else:
+        print(paint("32", "all good."))
+    return 1 if r.bad else 0
+
+
+COMMANDS = {"setup": setup, "doctor": doctor, "apply": apply, "screen": screen, "render": render, "check": check}
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    {"setup": setup, "render": render, "apply": apply, "check": check}.get(cmd, lambda: sys.exit(__doc__))()
+    if cmd not in COMMANDS:
+        sys.exit(__doc__)
+    sys.exit(COMMANDS[cmd](sys.argv[2:]) or 0)

@@ -94,7 +94,7 @@ when it ends. AirPlay and other links play as an overlay on top of whatever mode
 ## ░ tree
 
 ```
-bin/homelab            setup · render · apply · check
+bin/homelab            setup · doctor · apply · screen
 bin/private-git        optional private overlay repo (same work tree, own .git dir)
 config/                homelab.env.example (every key, documented)
                        homelab.env · settings.json · public.env stay local
@@ -111,36 +111,30 @@ system/                claude-rc.service (Claude Code Remote Control in tmux)
 
 ## ░ install
 
-Ubuntu Server with Docker (compose v2), Tailscale and `cloudflared`.
+You need an always-on Linux box (Ubuntu Server 24.04+ tested) and ten minutes.
 
 ```sh
-git clone https://github.com/keepggoingg/homelab /srv/homelab && cd /srv/homelab
-docker network create proxy
+sudo apt install -y git docker.io docker-compose-v2 && sudo usermod -aG docker $USER   # then log in again
+sudo git clone https://github.com/keepggoingg/homelab /srv/homelab && sudo chown -R $USER: /srv/homelab
+cd /srv/homelab
 
-bin/homelab setup      # config/homelab.env from the example, links every app's .env, lists empty keys
-$EDITOR config/homelab.env      # or later in the browser: http://<host>:8090/settings
-bin/homelab apply      # renders cloudflared/config.yml, starts traefik and the apps
-
-sudo ln -sf /srv/homelab/cloudflared/config.yml /etc/cloudflared/config.yml
+bin/homelab setup     # wizard: detects this machine, asks the rest, generates every secret
+bin/homelab doctor    # checks everything; each ✗ comes with the command that fixes it
+bin/homelab apply     # starts traefik and the apps
 ```
 
-<details>
-<summary><b>the screen</b> (optional)</summary>
+That's a working base on your LAN: `curl -H 'Host: hello.localhost' localhost` answers.
+Everything after that is optional and `doctor` walks you through it:
 
-<br>
+| want | do |
+| --- | --- |
+| apps on your own domain, no open ports | domain on Cloudflare → `bin/homelab setup --reconfigure`, then follow `doctor`'s tunnel steps |
+| reach it from anywhere, privately | install [Tailscale](https://tailscale.com/download/linux), `setup --reconfigure` picks up its IP |
+| the screen (dashboard, fireplace, YouTube, AirPlay) | `bin/homelab screen`, then the packages `doctor` lists |
+| the Apple Home remote | the HAP-python venv `doctor` prints, then pair the "TV" in the Home app |
+| the remote on the internet | Cloudflare Access app on `remote.<domain>` first, then set `SCREEN_REMOTE_HOST` |
 
-```sh
-ln -s /srv/homelab/screen/systemd/* ~/.config/systemd/user/
-cat screen/bash_profile.snippet >> ~/.bash_profile          # start sway on tty1
-mkdir -p ~/.config/sway && ln -s /srv/homelab/screen/sway.config ~/.config/sway/config
-sudo install -D -m644 screen/autologin.conf \
-  /etc/systemd/system/getty@tty1.service.d/autologin.conf   # replace YOUR_USER first
-```
-
-Needs `sway`, `chromium`, `mpv`, `yt-dlp`, `uxplay`, `python3-websocket`, and a HAP-python venv in
-`~/.local/share/homekit-venv` for the HomeKit remote. Put a looping `fireplace.mp4` in `/srv/media/`.
-
-</details>
+The repo lives in `/srv/homelab` because the systemd units point there; `doctor` tells you if it doesn't.
 
 <br>
 

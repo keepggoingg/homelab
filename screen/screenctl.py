@@ -109,7 +109,7 @@ def mpv_play(url):
     _mpv = subprocess.Popen(
         ["mpv", "--fs", "--no-terminal", "--force-window=immediate", "--input-ipc-server=" + MPV_SOCK,
          "--ytdl-format=bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-         "--script-opts=ytdl_hook-ytdl_path=/usr/local/bin/yt-dlp", url],
+         "--script-opts=ytdl_hook-ytdl_path=" + (shutil.which("yt-dlp") or "yt-dlp"), url],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     STATE["playing"] = url
 
