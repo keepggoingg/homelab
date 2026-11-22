@@ -60,6 +60,51 @@ when it ends. AirPlay and other links play as an overlay on top of whatever mode
 
 <br>
 
+## ░ dashboard pages
+
+Page 1 (clock, weather, server, home, Claude) ships with the repo. Page 2 (calendar, reminders, notes)
+appears once a client pushes a snapshot. Every other page comes from the **page builder**: drop a JSON file
+into `~/.config/homelab/pages/` and it joins the rotation, the dots, the remote's page switcher and
+`POST /api/page/<id>` within a minute. No restart, no code.
+
+That folder lives outside the repo on purpose: a page belongs to whatever project feeds it, so it never
+lands in this public repo. Keep the JSON in that project and symlink it in.
+
+```jsonc
+{
+  "id": "example",              // lowercase, starts with a letter; also the lock id
+  "title": "Example",           // remote button label
+  "order": 50,                  // pages sort by order, then id
+  "refresh": 30,                // seconds between data fetches while the page is visible
+  "source": {                   // one of: command (prints JSON) · url (returns JSON) · file (JSON)
+    "command": ["python3", "~/my-project/feed.py"], "every": 30, "timeout": 20
+  },
+  "tiles": [                    // laid out on the 4×2 grid, left to right; w 1–4, h 1–2
+    {"type": "stat", "title": "Load", "field": "load", "format": "num", "label": "1-minute average"}
+  ]
+}
+```
+
+| tile | shows | fields |
+| --- | --- | --- |
+| `stat` | one big value | `field`, `format`, `digits`, `label`/`label_field`, `sub`/`sub_field`, `alert_field` (truthy = warm color) |
+| `rows` | status list with dots | `field` → `[{name, value, format?, ok}]` |
+| `table` | rows × columns | `field` → `[{…, _dim?}]`, `columns: [{key, label, format, digits, width}]`, `max` |
+| `line` | time series, legend, event markers | `field` → `{series: [{name, points: [[x, y]], color?}], markers: [{x, label}], y_format, x_format, x_min, x_max, now}` |
+| `bars` | diverging bars around zero | `field` → `[{label, value}]`, `format` |
+| `text` | a paragraph | `field` or `value` |
+
+Every tile also takes `title`, `w`, `h`, and `head` / `head_field` (top-right text). `field` is a dotted path
+into the source's JSON (`market.gap`). Formats: `pct` (signed), `pct_abs`, `int`, `num`, `bytes`, `ago` and
+`until` (epoch seconds, live countdown), `time`, `daytime`.
+
+The source runs in screenctl (as your user), cached for `every` seconds; a failing source keeps showing its
+last data with the error under the page. Pages are only read from disk, so nothing on the network can add
+one. A broken file is skipped and reported by `GET /api/pages`. Start from
+[`docs/pages/example.json`](docs/pages/example.json).
+
+<br>
+
 ## ░ how it fits together
 
 ```
@@ -105,6 +150,7 @@ apps/<name>/           compose.yml per app (n8n, docs, hello)
 screen/                screenctl.py · dashboard.html · control.html · settings.html
                        homekit.py · sway.config · systemd user units
 system/                claude-rc.service (Claude Code Remote Control in tmux)
+docs/pages/            example page for the dashboard's page builder
 ```
 
 <br>
@@ -141,6 +187,7 @@ Everything after that is optional and `doctor` walks you through it:
 | reach it from anywhere, privately | install [Tailscale](https://tailscale.com/download/linux), `setup --reconfigure` picks up its IP |
 | the built-in screen (dashboard, fireplace, YouTube, AirPlay) | `bin/homelab screen`, then the packages `doctor` lists |
 | your calendars, reminders and notes on the screen | on your Mac: `clients/macos/install.sh http://<host>:8090` (Calendar app accounts incl. Outlook/Exchange, Reminders, chosen Notes) |
+| your own dashboard pages | a JSON file in `~/.config/homelab/pages/` (see [dashboard pages](#-dashboard-pages)) |
 | the Apple Home remote | the HAP-python venv `doctor` prints, then pair the "TV" in the Home app |
 | n8n on `n8n.<domain>` | Cloudflare Access app on it, then `CF_ACCESS_TEAM` + `CF_ACCESS_AUD` (until then n8n stays private: safe by default) |
 | the remote on the internet | Cloudflare Access app on `remote.<domain>` first, then set `SCREEN_REMOTE_HOST` |

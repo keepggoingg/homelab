@@ -24,7 +24,9 @@ HTTP API on :8090 (LAN + Tailscale only, via ufw):
   POST /api/mode/spotify      show the web player (to log in once with the laptop keyboard)
   GET  /api/claude            latest Claude Code session transcript (for the dashboard)
   POST /api/screen/<on|off>
-  POST /api/page/<1|2|auto>   dashboard page: 1 overview, 2 calendar (locked), auto = rotate
+  POST /api/page/<id|auto>    lock the dashboard on a page (1 overview, 2 calendar, or a built page id), auto = rotate
+  GET  /api/pages             page list: the two built-in pages + pages from the builder directory
+  GET  /api/pages/<id>        data of a built page (its source, cached for source.every seconds)
   GET  /api/volume            {volume 0..1, muted, sink} of the default audio output (PipeWire)
   POST /api/volume            value=0..1 or step=+-0.05;   POST /api/volume/mute  toggles mute
   GET  /api/config            dashboard settings (no secrets)
@@ -49,7 +51,7 @@ import hlconfig  # noqa: E402
 MEDIA = Path("/srv/media")
 SHELL, YT, SPOT = 9222, 9223, 9224
 WS = {"dashboard": 1, "fireplace": 1, "youtube": 2, "spotify": 4}
-STATE = {"mode": "dashboard", "playing": None, "screen": "on", "page": "auto"}   # page: auto | 1 | 2
+STATE = {"mode": "dashboard", "playing": None, "screen": "on", "page": "auto"}   # page: auto | 1 | 2 | built page id
 # where to go back to when a cast / shared video ends (None = user chose YouTube, stay there)
 RETURN = {"to": None, "seen_watch": False, "idle_since": None}
 LOCK = threading.RLock()
@@ -194,9 +196,9 @@ def play(url):
 
 
 def set_page(page):
-    """Lock the dashboard on page 1 / 2, or let it rotate. Browsers showing /dashboard follow via /api/stats."""
-    if page not in ("1", "2", "auto"):
-        raise ValueError("page must be 1, 2 or auto")
+    """Lock the dashboard on a page, or let it rotate. Browsers showing /dashboard follow via /api/stats."""
+    if page != "auto" and page not in page_ids():
+        raise ValueError("page must be auto, 1, 2 or the id of a built page")
     with LOCK:
         STATE["page"] = page
         try:
@@ -627,6 +629,107 @@ def agenda():
             "wanted_notes": [n.strip() for n in cfg["notes"].split(",") if n.strip()]}
 
 
+# ---------- page builder: extra dashboard pages from JSON files ----------
+# Page 1 (overview) ships with the repo, page 2 (calendar) shows once a client pushes a snapshot.
+# Every *.json in PAGES_DIR adds a page: tiles laid out on the same 4x2 grid, filled from the page's
+# source (a command printing JSON, an http(s) URL returning JSON, or a JSON file). The directory is
+# outside the repo on purpose: pages belong to the projects that feed them, not to this repo.
+# Pages are only read from disk; nothing over HTTP can create one, so a command source can't be injected.
+PAGES_DIR = Path(os.environ.get("HOMELAB_PAGES_DIR") or Path.home() / ".config/homelab/pages")
+BUILTIN_PAGES = [{"id": "1", "title": "Overview", "builtin": True},
+                 {"id": "2", "title": "Calendar", "builtin": True, "optional": True}]
+PAGE_ID = re.compile(r"[a-z][a-z0-9-]{0,31}")
+TILE_TYPES = ("stat", "rows", "table", "line", "bars", "text")
+_feeds, _feed_locks = {}, {}
+
+
+def load_pages():
+    pages, errors = [], []
+    files = sorted(PAGES_DIR.glob("*.json")) if PAGES_DIR.is_dir() else []
+    for f in files:
+        try:
+            p = json.loads(f.read_text())
+            if not isinstance(p, dict):
+                raise ValueError("expected a JSON object")
+            pid = str(p.get("id") or f.name.split(".")[0])
+            if not PAGE_ID.fullmatch(pid) or pid == "auto":
+                raise ValueError("id: lowercase letters, digits and dashes, starting with a letter")
+            tiles = p.get("tiles")
+            if not isinstance(tiles, list) or not tiles:
+                raise ValueError("tiles must be a non-empty list")
+            for t in tiles:
+                if not isinstance(t, dict) or t.get("type") not in TILE_TYPES:
+                    raise ValueError(f"every tile needs a type: {', '.join(TILE_TYPES)}")
+            src = p.get("source") or {}
+            if not isinstance(src, dict):
+                raise ValueError("source must be an object")
+            if any(x["id"] == pid for x in pages):
+                raise ValueError(f"duplicate page id {pid!r}")
+            pages.append({"id": pid, "title": str(p.get("title") or pid), "order": float(p.get("order", 100)),
+                          "refresh": max(5, int(p.get("refresh", 30))), "tiles": tiles, "source": src,
+                          "file": f.name})
+        except (OSError, ValueError, TypeError) as e:
+            errors.append({"file": f.name, "error": str(e)})
+    pages.sort(key=lambda p: (p["order"], p["id"]))
+    return pages, errors
+
+
+def page_ids():
+    return {p["id"] for p in BUILTIN_PAGES} | {p["id"] for p in load_pages()[0]}
+
+
+def pages_view():
+    pages, errors = load_pages()
+    built = [{k: p[k] for k in ("id", "title", "refresh", "tiles")} for p in pages]
+    return {"pages": BUILTIN_PAGES + built, "errors": errors, "dir": str(PAGES_DIR)}
+
+
+def fetch_source(src):
+    kind = src.get("type") or next((k for k in ("command", "url", "file") if k in src), None)
+    timeout = float(src.get("timeout", 20))
+    if kind == "command":
+        cmd = src["command"]
+        if not isinstance(cmd, list) or not cmd:
+            raise ValueError("command must be a list: [program, arg, ...]")
+        p = subprocess.run([os.path.expanduser(str(c)) for c in cmd], capture_output=True, text=True,
+                           timeout=timeout, cwd=os.path.expanduser(str(src.get("cwd", "~"))))
+        if p.returncode:
+            raise RuntimeError((p.stderr or p.stdout).strip()[-300:] or f"exit code {p.returncode}")
+        return json.loads(p.stdout)
+    if kind == "url":
+        url = str(src["url"])
+        if not url.startswith(("http://", "https://")):
+            raise ValueError("url must be http(s)")
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return json.load(r)
+    if kind == "file":
+        return json.loads(Path(os.path.expanduser(str(src["file"]))).read_text())
+    if not src:
+        return {}
+    raise ValueError("source needs a command, url or file")
+
+
+def page_data(pid):
+    page = next((p for p in load_pages()[0] if p["id"] == pid), None)
+    if page is None:
+        raise KeyError(pid)
+    every = max(2.0, float(page["source"].get("every", page["refresh"])))
+    with _feed_locks.setdefault(pid, threading.Lock()):   # one run per page at a time
+        t, data = _feeds.get(pid, (0.0, None))
+        if data is not None and time.time() - t < every:
+            return data
+        try:
+            data = fetch_source(page["source"])
+            if not isinstance(data, dict):
+                raise ValueError("the source must return a JSON object")
+            data["_updated"] = time.time()
+        except Exception as e:   # keep showing the last good data, flagged
+            old = _feeds.get(pid, (0.0, None))[1] or {}
+            data = dict(old, _error=f"{type(e).__name__}: {e}"[:300])
+        _feeds[pid] = (time.time(), data)
+        return data
+
+
 # ---------- settings ----------
 def settings_view():
     env, out = hlconfig.read_env(), []
@@ -739,6 +842,13 @@ class H(BaseHTTPRequestHandler):
             return self.send(200, hlconfig.dashboard_config())
         if path == "/api/agenda":
             return self.send(200, agenda())
+        if path == "/api/pages":
+            return self.send(200, pages_view())
+        if path.startswith("/api/pages/"):
+            try:
+                return self.send(200, page_data(path.rsplit("/", 1)[1]))
+            except KeyError:
+                return self.send(404, {"error": "no such page"})
         if path == "/api/settings":
             return self.send(200, settings_view()) if self.authorized() else self.deny()
         if path in ("/shell", "/dashboard"):

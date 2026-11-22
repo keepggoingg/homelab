@@ -53,7 +53,7 @@
   input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:var(--fg); margin-top:-8px; border:3px solid var(--bg); }
   input[type=range]::-moz-range-thumb { width:18px; height:18px; border-radius:50%; background:var(--fg); border:3px solid var(--bg); }
   [hidden] { display:none !important; }
-  .seg { display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; padding:4px; border:1px solid var(--line);
+  .seg { display:grid; grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:4px; padding:4px; border:1px solid var(--line);
          border-radius:14px; margin:0 0 20px; }
   .seg button { border:0; padding:12px 6px; border-radius:10px; font-size:15px; color:var(--dim); }
   .seg button.on { background:var(--line); color:var(--fg); }
@@ -99,6 +99,7 @@
   <button data-page="1" role="radio">Overview</button>
   <button data-page="2" role="radio">Calendar</button>
   <button data-page="auto" role="radio">Rotate</button>
+  <!-- built pages (page builder) are inserted before Rotate by pagesSeg() -->
 </div>
 <div id="screen-ui">
 <div class="grid">
@@ -203,10 +204,27 @@ document.querySelectorAll("[data-step]").forEach(b => b.onclick = async () => sh
 $("mute").onclick = async () => showVol(await post("volume/mute"));
 
 document.querySelectorAll("[data-a]").forEach(b => b.onclick = () => call(b.dataset.a));
-document.querySelectorAll("[data-page]").forEach(b => b.onclick = () => {
-  document.querySelectorAll("[data-page]").forEach(x => x.classList.toggle("on", x === b));
-  call("page/" + b.dataset.page);
-});
+function pageButtons() {
+  document.querySelectorAll("[data-page]").forEach(b => b.onclick = () => {
+    document.querySelectorAll("[data-page]").forEach(x => x.classList.toggle("on", x === b));
+    call("page/" + b.dataset.page);
+  });
+}
+/* built pages from the page builder (~/.config/homelab/pages) get a button each */
+async function pagesSeg() {
+  try {
+    const r = await (await fetch("/api/pages")).json();
+    document.querySelectorAll("[data-page].built").forEach(b => b.remove());
+    const rotate = document.querySelector('[data-page="auto"]');
+    for (const p of r.pages.filter(p => !p.builtin)) {
+      const b = document.createElement("button");
+      b.className = "built"; b.dataset.page = p.id; b.setAttribute("role", "radio"); b.textContent = p.title;
+      rotate.before(b);
+    }
+    pageButtons(); refresh();
+  } catch (e) {}
+}
+pageButtons(); pagesSeg();
 $("f").onsubmit = e => { e.preventDefault(); call("play", new URLSearchParams({url: $("url").value})); };
 refresh(); spotify(); volume();
 setInterval(refresh, 5000); setInterval(spotify, 2000); setInterval(volume, 3000);

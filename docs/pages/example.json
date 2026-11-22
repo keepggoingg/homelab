@@ -1,0 +1,18 @@
+{
+  "id": "example",
+  "title": "Example",
+  "order": 50,
+  "refresh": 30,
+  "source": {
+    "command": ["python3", "-c", "import json, os, shutil, time; u = shutil.disk_usage('/'); up = float(open('/proc/uptime').read().split()[0]); print(json.dumps({'load': os.getloadavg()[0], 'disk': u.used / u.total, 'boot': time.time() - up, 'rows': [{'name': 'free on /', 'value': u.free, 'format': 'bytes', 'ok': u.free > 5e9}, {'name': 'CPUs', 'value': os.cpu_count()}], 'note': 'Copy me to ~/.config/homelab/pages/ and point the source at your own script.'}))"],
+    "every": 30,
+    "timeout": 10
+  },
+  "tiles": [
+    {"type": "stat", "title": "Load", "field": "load", "format": "num", "label": "1-minute average"},
+    {"type": "stat", "title": "Disk", "field": "disk", "format": "pct_abs", "label": "used on /"},
+    {"type": "stat", "title": "Booted", "field": "boot", "format": "ago"},
+    {"type": "rows", "title": "Facts", "field": "rows"},
+    {"type": "text", "title": "How this page works", "field": "note", "w": 4}
+  ]
+}

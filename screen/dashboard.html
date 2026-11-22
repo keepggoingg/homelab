@@ -101,13 +101,33 @@
   .note .body { font-size: 24px; line-height: 1.45; white-space: pre-wrap; overflow: hidden; color: #e6e6e6;
                 -webkit-mask-image: linear-gradient(#000 75%, transparent); }
 
+  /* built pages (page builder, ~/.config/homelab/pages/*.json): same grid, generic tiles */
+  .b-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .b-stat { justify-content: space-between; }
+  .b-stat .b-body { justify-content: flex-end; gap: 10px; }
+  .big { font-size: 118px; font-weight: 800; line-height: .9; letter-spacing: -4px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+  .big.alert { color: #ff9b85; }
+  .tbl { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 16px; font-size: 25px; font-variant-numeric: tabular-nums; }
+  .tbl th { text-align: left; color: var(--mute); font-weight: 500; font-size: 20px; padding: 0 12px 10px 0; }
+  .tbl td { padding: 10px 12px 10px 0; border-top: 1px solid #262626; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tbl .num { text-align: right; } .tbl tr.dim td { color: var(--mute); }
+  .b-line .b-body svg { width: 100%; height: 100%; display: block; }
+  .legend { display: flex; gap: 22px; font-size: 20px; color: var(--mute); white-space: nowrap; }
+  .legend i { display: inline-block; width: 22px; height: 4px; border-radius: 2px; margin-right: 9px; vertical-align: middle; }
+  .bar { display: grid; grid-template-columns: 170px 1fr 120px; gap: 16px; align-items: center; font-size: 24px; padding: 7px 0; }
+  .bar .trk { height: 14px; position: relative; } .bar .trk::before { content: ""; position: absolute; left: 50%; top: -6px; bottom: -6px; width: 2px; background: #333; }
+  .bar .trk i { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: #fff; }
+  .bar span:last-child { text-align: right; font-variant-numeric: tabular-nums; color: var(--mute); }
+  .b-text .b-body { font-size: 26px; line-height: 1.45; white-space: pre-wrap; margin-top: 18px; color: #e6e6e6; }
+  .b-note { position: absolute; left: 48px; bottom: 12px; font-size: 18px; color: #ff9b85; white-space: nowrap; }
+
   #fire { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; opacity: 0; pointer-events: none; transition: opacity .6s; z-index: 2; }
   body.fireplace #fire { opacity: 1; pointer-events: auto; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<div class="grid page" id="p1">
+<div class="grid page" id="p1" data-page="1">
   <section class="tile wide clock-tile">
     <div class="date" id="date"></div>
     <div class="clock" id="time">--:--</div>
@@ -149,7 +169,7 @@
   </section>
 </div>
 
-<div class="grid page off" id="p2">
+<div class="grid page off" id="p2" data-page="2">
   <section class="tile wide tall agenda">
     <div class="head"><div class="title">Calendar</div><div class="sub" id="ag-upd"></div></div>
     <div class="ag" id="ag"><div class="empty">Waiting for the first snapshot from your Mac (clients/macos).</div></div>
@@ -160,7 +180,8 @@
   </section>
   <section class="tile wide"><div class="notes" id="notes"></div></section>
 </div>
-<div class="dots" id="dots" hidden><i class="on"></i><i></i></div>
+<div id="built"></div>
+<div class="dots" id="dots" hidden></div>
 
 <nav class="dock">
   <button data-mode="dashboard">Dashboard</button>
@@ -284,7 +305,7 @@ window.setMode = m => {
   setActive(m); focus = -1; paint(); document.body.classList.remove("remote");
 };
 window.remote = key => {
-  if (focus < 0 && mode === "dashboard" && (key === "left" || key === "right") && (hasAgenda || lock !== "auto")) {
+  if (focus < 0 && mode === "dashboard" && (key === "left" || key === "right") && (avail().length > 1 || lock !== "auto")) {
     return flip(key === "right" ? 1 : -1, true);   // dock hidden: left/right flip pages
   }
   document.body.classList.add("remote"); clearTimeout(remoteTimer);
@@ -302,7 +323,7 @@ buttons.forEach(b => b.onclick = () => activate(b));
 fire.onclick = () => fetch("/api/mode/dashboard", {method: "POST"});
 
 /* page 2: calendar, reminders, notes (snapshot from clients/macos/homelab-sync) */
-let hasAgenda = false, page = 1, pausedUntil = 0, sincePage = 0;
+let hasAgenda = false, page = "1", pausedUntil = 0, sincePage = 0;
 const dayKey = d => d.toLocaleDateString("en-CA");
 const hm = d => d.toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"});
 function dayLabel(d) {
@@ -318,8 +339,7 @@ async function agenda() {
   let a;
   try { a = await (await fetch("/api/agenda")).json(); } catch (e) { return; }
   const src = (a.sources || [])[0];
-  hasAgenda = !!src;
-  $("dots").hidden = !hasAgenda;
+  if (hasAgenda !== !!src) { hasAgenda = !!src; renderDots(); }
   if (!src) return;
   const stale = Date.now() / 1000 - src.received_at > 3 * 3600;
   $("ag-upd").textContent = (stale ? `${src.device} offline · ` : "") + `updated ${ago(src.received_at)}`;
@@ -354,30 +374,184 @@ async function agenda() {
     `<div class="note"><div class="title">${esc(n.name)}</div><div class="body">${esc(n.text)}</div></div>`).join("")
     || `<div class="empty">${a.wanted_notes.length ? "Notes not found: " + esc(a.wanted_notes.join(", ")) : "Pick notes to show in Settings."}</div>`;
 }
-let lock = "auto";                // "1" / "2" = locked on that page (remote's page switcher), "auto" = rotate
-function showPage(n) {
-  page = n;
-  $("p1").classList.toggle("off", page !== 1); $("p2").classList.toggle("off", page !== 2);
-  [...$("dots").children].forEach((d, i) => d.classList.toggle("on", i + 1 === page));
-  sincePage = 0;
+/* pages: "1" overview (built in), "2" calendar (once a client pushed a snapshot), then built pages */
+let lock = "auto";                // a page id = locked there (remote's page switcher), "auto" = rotate
+let PAGES = [{id: "1", builtin: true}, {id: "2", builtin: true}], pagesSig = "";
+const avail = () => PAGES.filter(p => p.id === "1" || (p.id === "2" ? hasAgenda : !p.builtin) && document.querySelector(`[data-page="${p.id}"]`)).map(p => p.id);
+function renderDots() {
+  const a = avail();
+  $("dots").hidden = a.length < 2;
+  $("dots").innerHTML = a.map(id => `<i class="${id === page ? "on" : ""}"></i>`).join("");
 }
-window.setPage = p => { lock = String(p); if (lock !== "auto") showPage(+lock); };
-function flip(dir, manual) {      // two pages, so either direction toggles
+function showPage(id) {
+  if (!document.querySelector(`[data-page="${id}"]`)) id = "1";   // locked on a page that isn't built (yet)
+  page = id;
+  document.querySelectorAll(".page").forEach(e => e.classList.toggle("off", e.dataset.page !== id));
+  renderDots(); sincePage = 0;
+  if (BUILT[id]) { renderBuilt(id); loadBuilt(id); }
+}
+window.setPage = p => { lock = String(p); if (lock !== "auto") showPage(lock); };
+function flip(dir, manual) {
+  const a = avail(), to = a[(Math.max(0, a.indexOf(page)) + dir + a.length) % a.length];
   if (manual && lock !== "auto") {  // locked: the arrows move the lock
-    const to = page === 1 ? "2" : "1";
     fetch("/api/page/" + to, {method: "POST"}); return window.setPage(to);
   }
-  showPage(hasAgenda && page === 1 ? 2 : 1);
+  showPage(to);
   if (manual) pausedUntil = Date.now() + 120000;   // a manual flip holds the page for 2 minutes
 }
 setInterval(() => {
   const every = +CFG.page_seconds || 0;
-  if (lock !== "auto" || !every || !hasAgenda || mode !== "dashboard" || document.body.classList.contains("remote") || Date.now() < pausedUntil) return;
+  if (lock !== "auto" || !every || avail().length < 2 || mode !== "dashboard" || document.body.classList.contains("remote") || Date.now() < pausedUntil) return;
   if (++sincePage >= every) flip(1, false);
 }, 1000);
 
-clock(); config(); stats(); music(); claude(); agenda();
-setInterval(agenda, 30000);
+/* page builder: tiles from /api/pages, data from /api/pages/<id> */
+const BUILT = {};                 // id -> {page, data, at}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, Math.round(+v || a)));
+const get = (o, path) => path == null ? undefined : String(path).split(".").reduce((a, k) => a == null ? a : a[k], o);
+function dur(s) {
+  s = Math.max(0, Math.round(s));
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ${Math.floor(s % 3600 / 60)} min`;
+  return `${Math.floor(s / 86400)} d ${Math.floor(s % 86400 / 3600)} h`;
+}
+function fmt(v, f, d) {
+  if (v == null || v === "" || (typeof v === "number" && !isFinite(v))) return "–";
+  switch (f) {
+    case "pct": return (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(d ?? 2) + "%";
+    case "pct_abs": return (v * 100).toFixed(d ?? 1) + "%";
+    case "int": return Math.round(v).toLocaleString("en-GB");
+    case "num": return (+v).toLocaleString("en-GB", {maximumFractionDigits: d ?? 2});
+    case "bytes": { const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0; while (v >= 1024 && i < 4) { v /= 1024; i++; } return v.toFixed(i ? 1 : 0) + " " + u[i]; }
+    case "ago": return dur(Date.now() / 1000 - v) + " ago";
+    case "until": return v - Date.now() / 1000 <= 0 ? "now" : dur(v - Date.now() / 1000);
+    case "time": return new Date(v * 1000).toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"});
+    case "daytime": return new Date(v * 1000).toLocaleString("en-GB", {weekday: "short", hour: "2-digit", minute: "2-digit"});
+    default: return String(v);
+  }
+}
+const SERIES = ["#3987e5", "#d95926", "#199e70", "#c98500"];   // validated on the tile surface (dark)
+function niceTicks(lo, hi, n) {
+  const step0 = (hi - lo) / n || 1, mag = 10 ** Math.floor(Math.log10(step0));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= step0);
+  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-12; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+function timeTicks(x0, x1) {          // epoch seconds -> ticks on whole local hours, about 5 of them
+  const step = [3600, 7200, 10800, 21600, 43200, 86400].find(s => (x1 - x0) / s <= 6) || 172800;
+  const off = -new Date(x0 * 1000).getTimezoneOffset() * 60, out = [];
+  for (let v = Math.ceil((x0 + off) / step) * step - off; v <= x1; v += step) out.push(v);
+  return out;
+}
+function lineSvg(el, c, t) {
+  const W = el.clientWidth || 800, H = el.clientHeight || 300, L = 92, R = 12, T = 34 + 2 * 23, B = 38;
+  const series = (c.series || []).filter(s => (s.points || []).length);
+  if (!series.length) return `<div class="empty">${esc(t.empty || "No data yet.")}</div>`;
+  const xs = series.flatMap(s => s.points.map(p => p[0])), ys = series.flatMap(s => s.points.map(p => p[1]));
+  let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  if (c.x_min != null) x0 = Math.min(x0, c.x_min); if (c.x_max != null) x1 = Math.max(x1, c.x_max);
+  if (c.zero !== false) { y0 = Math.min(y0, 0); y1 = Math.max(y1, 0); }
+  if (y1 === y0) y1 = y0 + 1; if (x1 === x0) x1 = x0 + 1;
+  const pad = (y1 - y0) * .08; y0 -= pad; y1 += pad;
+  const X = v => L + (v - x0) / (x1 - x0) * (W - L - R), Y = v => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  const xl = c.x_format || "daytime", timeAxis = xl === "daytime" || xl === "time";
+  const yt = niceTicks(y0, y1, 4), xt = timeAxis ? timeTicks(x0, x1) : niceTicks(x0, x1, 5);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t.title || "chart")}">`;
+  s += yt.map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 0 ? "#4a4a4a" : "#262626"}" stroke-width="${v === 0 ? 2 : 1}"/>`
+    + `<text x="${L - 14}" y="${Y(v) + 7}" fill="#9a9a9a" font-size="20" text-anchor="end">${esc(fmt(v, c.y_format, c.y_digits ?? 1))}</text>`).join("");
+  s += xt.filter(v => X(v) > L + 40 && X(v) < W - R - 40).map(v => `<text x="${X(v)}" y="${H - 8}" fill="#9a9a9a" font-size="20" text-anchor="middle">${esc(fmt(v, xl))}</text>`).join("");
+  const rowEnd = [];                 // marker labels: drop to the next row when they would overlap
+  for (const m of (c.markers || []).filter(m => m.x >= x0 && m.x <= x1).sort((a, b) => a.x - b.x)) {
+    const x = X(m.x), w = String(m.label).length * 10.5 + 16;
+    let row = rowEnd.findIndex(e => e < x); if (row < 0) row = rowEnd.length; rowEnd[row] = x + w;
+    s += `<line x1="${x}" x2="${x}" y1="${T - 26 + row * 23}" y2="${H - B}" stroke="#6a6a6a" stroke-width="1.5" stroke-dasharray="4 6"/>`
+      + `<text x="${x + 8}" y="${T - 10 + row * 23}" fill="#c3c2b7" font-size="19">${esc(m.label)}</text>`;
+  }
+  series.forEach((sr, i) => {
+    const d = sr.points.map((p, j) => `${j ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+    s += `<path d="${d}" fill="none" stroke="${esc(sr.color || SERIES[i % SERIES.length])}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`;
+  });
+  if (c.now != null && c.now >= x0 && c.now <= x1) s += `<line x1="${X(c.now)}" x2="${X(c.now)}" y1="${T}" y2="${H - B}" stroke="#fff" stroke-width="2" opacity=".5"/>`;
+  return s + "</svg>";
+}
+function tileHtml(t, data, el) {
+  const val = get(data, t.field) ?? t.value;
+  switch (t.type) {
+    case "stat": {
+      const alert = t.alert_field ? !!get(data, t.alert_field) : false;
+      const label = t.label_field ? get(data, t.label_field) : t.label, sub = t.sub_field ? get(data, t.sub_field) : t.sub;
+      return `<div class="big ${alert ? "alert" : ""}">${esc(fmt(val, t.format, t.digits))}</div>`
+        + (label ? `<div class="cond">${esc(label)}</div>` : "") + (sub ? `<div class="sub">${esc(sub)}</div>` : "");
+    }
+    case "rows":
+      return `<div class="list">${(val || []).slice(0, t.max || 6).map(r => `<div class="row ${r.ok === false ? "off" : ""}"><span>${esc(r.name)}</span><span>${esc(fmt(r.value, r.format))}</span></div>`).join("")}</div>`;
+    case "table": {
+      const cols = t.columns || [], rows = (val || []).slice(0, t.max || 8);
+      if (!rows.length) return `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
+      return `<table class="tbl"><thead><tr>${cols.map(c => `<th class="${c.format && c.format !== "text" ? "num" : ""}" style="${c.width ? "width:" + esc(c.width) : ""}">${esc(c.label ?? c.key)}</th>`).join("")}</tr></thead><tbody>`
+        + rows.map(r => `<tr class="${r._dim ? "dim" : ""}">${cols.map(c => `<td class="${c.format && c.format !== "text" ? "num" : ""}">${esc(fmt(r[c.key], c.format, c.digits))}</td>`).join("")}</tr>`).join("") + "</tbody></table>";
+    }
+    case "line": return lineSvg(el, val || {}, t);
+    case "bars": {
+      const rows = (val || []).slice(0, t.max || 8), m = Math.max(1e-12, ...rows.map(r => Math.abs(r.value)));
+      return rows.map(r => { const w = Math.abs(r.value) / m * 50;
+        return `<div class="bar"><span>${esc(r.label)}</span><div class="trk"><i style="${r.value >= 0 ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`}"></i></div><span>${esc(fmt(r.value, t.format, t.digits))}</span></div>`; }).join("")
+        || `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
+    }
+    case "text": return esc(val ?? "");
+  }
+  return "";
+}
+function buildPages() {
+  $("built").innerHTML = PAGES.filter(p => !p.builtin).map(p => `<div class="grid page off" data-page="${esc(p.id)}">`
+    + p.tiles.map((t, i) => `<section class="tile b-${esc(t.type)}" style="grid-column:span ${clamp(t.w, 1, 4)};grid-row:span ${clamp(t.h, 1, 2)}" data-tile="${i}">`
+      + `<div class="head"><div class="title">${esc(t.title || "")}</div><div class="sub" data-sub></div></div><div class="b-body" data-body></div></section>`).join("")
+    + `<div class="b-note" data-note></div></div>`).join("");
+  for (const p of PAGES.filter(p => !p.builtin)) BUILT[p.id] = {page: p, data: (BUILT[p.id] || {}).data || null, at: 0};
+  for (const id of Object.keys(BUILT)) if (!PAGES.some(p => p.id === id)) delete BUILT[id];
+  showPage(lock !== "auto" ? lock : avail().includes(page) ? page : "1");
+}
+function renderBuilt(id) {
+  const b = BUILT[id], el = document.querySelector(`.page[data-page="${id}"]`);
+  if (!b || !el) return;
+  const data = b.data || {};
+  b.page.tiles.forEach((t, i) => {
+    const tile = el.querySelector(`[data-tile="${i}"]`), body = tile.querySelector("[data-body]");
+    const sub = t.type === "line" && (get(data, t.field)?.series || []).length > 1
+      ? `<div class="legend">${get(data, t.field).series.map((s, j) => `<span><i style="background:${esc(s.color || SERIES[j % SERIES.length])}"></i>${esc(s.name)}</span>`).join("")}</div>`
+      : esc(t.head_field ? fmt(get(data, t.head_field), t.head_format) : t.head || "");
+    tile.querySelector("[data-sub]").innerHTML = sub;
+    body.innerHTML = b.data ? tileHtml(t, data, body) : '<div class="empty">Loading…</div>';
+    for (const big of body.querySelectorAll(".big")) {
+      let fs = 118; big.style.fontSize = fs + "px";
+      while (big.scrollWidth > big.clientWidth && fs > 36) { fs -= 6; big.style.fontSize = fs + "px"; }
+    }
+  });
+  el.querySelector("[data-note]").textContent = data._error ? "source error: " + data._error : "";
+}
+async function loadBuilt(id) {
+  const b = BUILT[id]; if (!b) return;
+  b.at = Date.now();
+  try { b.data = await (await fetch("/api/pages/" + encodeURIComponent(id))).json(); } catch (e) { return; }
+  if (page === id) renderBuilt(id);
+}
+async function pages() {
+  try {
+    const r = await (await fetch("/api/pages")).json();
+    const sig = JSON.stringify(r.pages);
+    if (sig === pagesSig) return;
+    pagesSig = sig; PAGES = r.pages; buildPages();
+  } catch (e) {}
+}
+setInterval(() => {   // the visible built page: refresh its data on schedule, re-render every second (countdowns)
+  const b = BUILT[page];
+  if (!b || mode !== "dashboard") return;
+  if (Date.now() - b.at > b.page.refresh * 1000) loadBuilt(page); else renderBuilt(page);
+}, 1000);
+
+clock(); config(); stats(); music(); claude(); agenda(); pages();
+setInterval(agenda, 30000); setInterval(pages, 60000);
 setInterval(config, 60000); setInterval(clock, 1000); setInterval(stats, 3000); setInterval(music, 2000); setInterval(claude, 2000); setInterval(weather, 15 * 60000);
 </script>
 </body>
