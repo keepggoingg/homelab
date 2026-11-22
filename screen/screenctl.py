@@ -609,7 +609,7 @@ def agenda():
     reminders.sort(key=lambda r: (r.get("due_ts") is None, r.get("due_ts") or 0, not r.get("flagged")))
     ordered = [notes[n] for n in wanted if n in notes] if wanted else list(notes.values())
     return {"events": events, "reminders": reminders[:40], "notes": ordered, "sources": sources,
-            "wanted_notes": [n for n in cfg["notes"].split(",") if n.strip()]}
+            "wanted_notes": [n.strip() for n in cfg["notes"].split(",") if n.strip()]}
 
 
 # ---------- settings ----------
