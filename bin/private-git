@@ -1,0 +1,28 @@
+#!/bin/sh
+# Private overlay repo: same work tree as the public repo, its own git dir (.git-private).
+# It tracks only the personal paths below, which the public .gitignore hides.
+#
+#   bin/private-git sync ["message"]   stage PATHS (+ deletions), commit, push
+#   bin/private-git <any git command>  e.g. log, status, diff
+#
+# The public .gitignore applies here too, so files are staged with `add -f`, and only from PATHS.
+# Anything that looks like a secret (.env, secrets/, data/, keys) is refused.
+set -eu
+cd "$(dirname "$0")/.."
+PATHS="CLAUDE.private.md config/settings.json apps/docs/site apps/n8n/workflows apps/upwork-agent private"
+g() { git --git-dir=.git-private --work-tree=. "$@"; }
+
+if [ "${1:-}" != "sync" ]; then g "$@"; exit; fi
+
+existing=""
+for p in $PATHS; do [ -e "$p" ] && existing="$existing $p"; done
+# shellcheck disable=SC2086
+g add -f -A -- $existing
+bad=$(g diff --cached --name-only --diff-filter=AM | grep -E '(^|/)(\.env[^/]*|secrets/.*|data/.*|[^/]*\.(pem|key))$' || true)
+if [ -n "$bad" ]; then
+  g reset -q
+  echo "refusing to commit secret-looking files:" >&2; echo "$bad" >&2; exit 1
+fi
+if g diff --cached --quiet; then echo "private: nothing to commit"; else g commit -q -m "${2:-private: sync}"; fi
+g push -q 2>&1 | tail -2
+g log --oneline -1

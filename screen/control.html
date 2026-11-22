@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>homelab screen</title>
+<style>
+  :root { --bg:#0e0d0b; --fg:#ece6da; --dim:#8b8478; --line:#2a2722; --warm:#e8a75b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.4 -apple-system, "Noto Sans", sans-serif; padding:28px 20px; max-width:480px; margin:auto; }
+  h1 { font-size:22px; font-weight:600; margin:0 0 4px; }
+  p { color:var(--dim); margin:0 0 24px; font-size:14px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  button { background:none; border:1px solid var(--line); color:var(--fg); font:inherit; padding:18px 8px; border-radius:12px; }
+  button:active { background:var(--line); }
+  button.on { border-color:var(--warm); color:var(--warm); }
+  form { display:flex; gap:8px; margin:24px 0 8px; }
+  input { flex:1; min-width:0; background:#191714; border:1px solid var(--line); color:var(--fg); font:inherit; padding:14px; border-radius:12px; }
+  #msg { color:var(--dim); font-size:14px; min-height:20px; margin-top:12px; }
+</style>
+</head>
+<body>
+<h1>Screen</h1>
+<p id="state">…</p>
+<div class="grid">
+  <button data-a="mode/dashboard">Dashboard</button>
+  <button data-a="mode/fireplace">Fireplace</button>
+  <button data-a="mode/youtube">YouTube</button>
+  <button data-a="stop">Stop video</button>
+  <button data-a="screen/on">Screen on</button>
+  <button data-a="screen/off">Screen off</button>
+</div>
+<form id="f"><input id="url" type="url" placeholder="Video link" required><button>▶</button></form>
+<div id="msg"></div>
+<p style="margin-top:28px"><a href="/settings" style="color:var(--warm)">Settings</a></p>
+<script>
+const msg = t => document.getElementById("msg").textContent = t;
+async function call(path, body) {
+  const r = await fetch("/api/" + path, {method:"POST", body});
+  const j = await r.json(); msg(j.error ? "Error: " + j.error : "Done"); refresh();
+}
+async function refresh() {
+  const s = (await (await fetch("/api/stats")).json()).state;
+  document.getElementById("state").textContent =
+    "Mode: " + s.mode + (s.playing ? ", playing a video" : "") + ", screen " + s.screen;
+  document.querySelectorAll("[data-a^=mode]").forEach(b => b.classList.toggle("on", b.dataset.a === "mode/" + s.mode));
+}
+document.querySelectorAll("[data-a]").forEach(b => b.onclick = () => call(b.dataset.a));
+document.getElementById("f").onsubmit = e => { e.preventDefault(); call("play", new URLSearchParams({url: document.getElementById("url").value})); };
+refresh();
+</script>
+</body>
+</html>

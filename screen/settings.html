@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>homelab settings</title>
+<style>
+  :root { --bg:#0e0d0b; --fg:#ece6da; --dim:#8b8478; --line:#2a2722; --field:#191714; --warm:#e8a75b; --bad:#e2725b; }
+  * { box-sizing:border-box; }
+  body { margin:0 auto; background:var(--bg); color:var(--fg); font:16px/1.45 -apple-system, "Noto Sans", sans-serif; padding:28px 20px 80px; max-width:640px; }
+  h1 { font-size:22px; font-weight:600; margin:0 0 4px; }
+  h2 { font-size:15px; font-weight:600; margin:36px 0 4px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
+  p.lead, .note { color:var(--dim); font-size:14px; margin:0 0 16px; }
+  a { color:var(--warm); }
+  label { display:block; margin:16px 0 0; }
+  .k { font-size:14px; font-weight:600; font-family:ui-monospace, Menlo, monospace; }
+  .help { color:var(--dim); font-size:13px; margin:2px 0 6px; }
+  input { width:100%; background:var(--field); border:1px solid var(--line); color:var(--fg); font:inherit; padding:11px 12px; border-radius:10px; }
+  input:focus { outline:none; border-color:var(--warm); }
+  input.changed { border-color:var(--warm); }
+  .row { display:flex; gap:8px; align-items:center; }
+  .row > input { flex:1; min-width:0; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .tag { font-size:12px; color:var(--dim); border:1px solid var(--line); border-radius:6px; padding:1px 6px; margin-left:6px; font-weight:400; font-family:inherit; }
+  .tag.set { color:var(--warm); border-color:#5a4426; }
+  .clear { font-size:13px; color:var(--dim); white-space:nowrap; display:flex; gap:4px; align-items:center; margin:0; }
+  .clear input { width:auto; }
+  button { background:none; border:1px solid var(--line); color:var(--fg); font:inherit; padding:11px 16px; border-radius:10px; cursor:pointer; }
+  button.primary { border-color:var(--warm); color:var(--warm); }
+  button.danger { border-color:var(--bad); color:var(--bad); }
+  button:disabled { opacity:.4; cursor:default; }
+  .bar { position:sticky; bottom:0; background:linear-gradient(transparent, var(--bg) 30%); padding:28px 0 12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  #msg { color:var(--dim); font-size:14px; }
+  #msg.err { color:var(--bad); }
+  #places { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+  #places button { text-align:left; padding:8px 12px; font-size:14px; }
+  pre { background:var(--field); border:1px solid var(--line); border-radius:10px; padding:12px; font-size:12px; overflow:auto; max-height:340px; white-space:pre-wrap; }
+  #login { margin-top:24px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<h1>Settings</h1>
+<p class="lead">Dashboard options are saved to <code>config/settings.json</code> and show up on the screen within a minute. Infrastructure keys live in <code>config/homelab.env</code>; after saving, press <b>Apply</b> to re-render configs and restart what changed. <a href="/">Remote</a></p>
+
+<form id="login" hidden>
+  <label><span class="k">Settings token</span>
+    <div class="help">SETTINGS_TOKEN from config/homelab.env on the server. Kept in this browser only.</div>
+    <div class="row"><input id="token" type="password" autocomplete="current-password" required><button class="primary">Unlock</button></div>
+  </label>
+</form>
+
+<main id="main" hidden>
+  <h2>Dashboard</h2>
+  <label><span class="k">Find a place</span>
+    <div class="help">Search a city to fill in name, coordinates and time zone (Open-Meteo geocoding).</div>
+    <div class="row"><input id="q" placeholder="City"><button type="button" id="find">Search</button></div>
+    <div id="places"></div>
+  </label>
+  <label><span class="k">Location name</span><input data-d="location_name"></label>
+  <div class="two">
+    <label><span class="k">Latitude</span><input data-d="latitude" inputmode="decimal"></label>
+    <label><span class="k">Longitude</span><input data-d="longitude" inputmode="decimal"></label>
+  </div>
+  <label><span class="k">Time zone</span><div class="help">IANA name, e.g. Europe/Berlin. Empty = TZ below.</div><input data-d="timezone"></label>
+  <label><span class="k">Status check URL</span><div class="help">Checked every 2 minutes for the Home tile. Empty = https://DOMAIN/.</div><input data-d="probe_url" type="url"></label>
+  <label><span class="k">Status check label</span><div class="help">Empty = DOMAIN.</div><input data-d="probe_label"></label>
+
+  <h2>Infrastructure</h2>
+  <p class="note">Changing these can take services offline (domain, tunnel, Cloudflare Access). Secrets are never sent back to this page: leave a secret empty to keep it.</p>
+  <div id="env"></div>
+
+  <h2>Last apply</h2>
+  <pre id="log">Nothing applied yet in this session.</pre>
+</main>
+
+<div class="bar" id="bar" hidden>
+  <button class="primary" id="save" disabled>Save</button>
+  <button id="apply">Apply</button>
+  <button id="lock">Lock</button>
+  <span id="msg"></span>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]);
+let token = localStorage.getItem("hl-settings-token") || "", data = null, armed = 0;
+const msg = (t, err) => { $("msg").textContent = t; $("msg").className = err ? "err" : ""; };
+
+async function api(path, body) {
+  const r = await fetch("/api/" + path, {method: body === undefined ? "GET" : "POST",
+    headers: {"X-Settings-Token": token, "Content-Type": "application/json"}, body: body === undefined ? undefined : JSON.stringify(body)});
+  const j = await r.json().catch(() => ({error: r.statusText}));
+  if (r.status === 401 || r.status === 403) { showLogin(j.error); throw new Error(j.error); }
+  if (!r.ok && !("log" in j)) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+function showLogin(err) {
+  $("login").hidden = false; $("main").hidden = $("bar").hidden = true;
+  if (err && token) msg(err, true);
+}
+
+function render(d) {
+  data = d;
+  document.querySelectorAll("[data-d]").forEach(i => { i.value = d.dashboard[i.dataset.d] ?? ""; i.dataset.orig = i.value; i.classList.remove("changed"); });
+  $("env").innerHTML = d.env.map(e => `
+    <label><span class="k">${esc(e.key)}${e.secret ? `<span class="tag ${e.set ? "set" : ""}">${e.set ? "secret, set" : "secret, not set"}</span>` : ""}</span>
+      ${e.help ? `<div class="help">${esc(e.help)}</div>` : ""}
+      <div class="row">
+        <input data-e="${esc(e.key)}" ${e.secret ? 'type="password" autocomplete="new-password"' : ""} value="${esc(e.value)}" data-orig="${esc(e.value)}"
+          placeholder="${e.secret ? (e.set ? "unchanged" : "not set") : esc(e.default)}">
+        ${e.secret && e.set ? `<span class="clear"><input type="checkbox" data-clear="${esc(e.key)}"> clear</span>` : ""}
+      </div>
+    </label>`).join("");
+  document.querySelectorAll("input[data-e], input[data-d], input[data-clear]").forEach(i => i.oninput = i.onchange = dirty);
+  $("login").hidden = true; $("main").hidden = $("bar").hidden = false; dirty();
+}
+
+function changes() {
+  const dashboard = {}, env = {}, clear = [];
+  document.querySelectorAll("[data-d]").forEach(i => { if (i.value !== i.dataset.orig) dashboard[i.dataset.d] = i.value; });
+  document.querySelectorAll("[data-e]").forEach(i => { if (i.value !== i.dataset.orig) env[i.dataset.e] = i.value; });
+  document.querySelectorAll("[data-clear]:checked").forEach(i => clear.push(i.dataset.clear));
+  return {dashboard, env, clear};
+}
+
+function dirty() {
+  document.querySelectorAll("[data-d], [data-e]").forEach(i => i.classList.toggle("changed", i.value !== i.dataset.orig));
+  const c = changes(), n = Object.keys(c.dashboard).length + Object.keys(c.env).length + c.clear.length;
+  $("save").disabled = !n; $("save").textContent = n ? `Save ${n} change${n > 1 ? "s" : ""}` : "Save";
+}
+
+async function load() {
+  if (!token) return showLogin();
+  try { render(await api("settings")); msg(""); } catch (e) { if (data) msg(e.message, true); }
+}
+
+$("login").onsubmit = e => { e.preventDefault(); token = $("token").value.trim(); localStorage.setItem("hl-settings-token", token); load(); };
+$("lock").onclick = () => { token = ""; localStorage.removeItem("hl-settings-token"); $("token").value = ""; showLogin(); msg(""); };
+
+$("save").onclick = async () => {
+  const c = changes();
+  if (c.dashboard.latitude !== undefined && isNaN(parseFloat(c.dashboard.latitude))) return msg("Latitude must be a number", true);
+  if (c.dashboard.longitude !== undefined && isNaN(parseFloat(c.dashboard.longitude))) return msg("Longitude must be a number", true);
+  try {
+    render(await api("settings", c));
+    msg(Object.keys(c.env).length || c.clear.length ? "Saved. Press Apply to use the new infrastructure values." : "Saved.");
+  } catch (e) { msg(e.message, true); }
+};
+
+$("apply").onclick = async () => {
+  if (!$("save").disabled) return msg("Save your changes first.", true);
+  if (Date.now() - armed > 4000) { armed = Date.now(); $("apply").classList.add("danger"); $("apply").textContent = "Apply: tap again"; return; }
+  armed = 0; $("apply").classList.remove("danger"); $("apply").textContent = "Applying…"; $("apply").disabled = true;
+  try {
+    const r = await api("settings/apply", {});
+    $("log").textContent = r.log || "(no output)";
+    msg(r.ok ? "Applied." : "Apply failed, see the log.", !r.ok);
+  } catch (e) { msg(e.message, true); }
+  $("apply").textContent = "Apply"; $("apply").disabled = false;
+};
+setInterval(() => { if (armed && Date.now() - armed > 4000) { armed = 0; $("apply").classList.remove("danger"); $("apply").textContent = "Apply"; } }, 500);
+
+$("find").onclick = async () => {
+  const q = $("q").value.trim(); if (!q) return;
+  try {
+    const r = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&name=${encodeURIComponent(q)}`)).json();
+    $("places").innerHTML = (r.results || []).map((p, i) =>
+      `<button type="button" data-i="${i}">${esc(p.name)}, ${esc([p.admin1, p.country].filter(Boolean).join(", "))} <span class="tag">${esc(p.timezone)}</span></button>`).join("") || '<div class="help">No matches.</div>';
+    $("places").querySelectorAll("button").forEach(b => b.onclick = () => {
+      const p = r.results[b.dataset.i], set = (k, v) => { document.querySelector(`[data-d="${k}"]`).value = v; };
+      set("location_name", p.name); set("latitude", p.latitude); set("longitude", p.longitude); set("timezone", p.timezone);
+      $("places").innerHTML = ""; dirty();
+    });
+  } catch (e) { $("places").innerHTML = '<div class="help">Search unavailable.</div>'; }
+};
+$("q").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); $("find").click(); } };
+
+load();
+</script>
+</body>
+</html>

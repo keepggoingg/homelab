@@ -1,0 +1,12 @@
+[Unit]
+Description=HomeKit TV accessory for the built-in display
+After=network-online.target
+
+[Service]
+EnvironmentFile=/srv/homelab/config/public.env
+ExecStart=%h/.local/share/homekit-venv/bin/python /srv/homelab/screen/homekit.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

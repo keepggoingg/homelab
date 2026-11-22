@@ -1,0 +1,13 @@
+[Unit]
+Description=AirPlay receiver (UxPlay), named after HL_HOST
+PartOf=sway-session.target
+After=sway-session.target
+
+[Service]
+EnvironmentFile=/srv/homelab/config/public.env
+ExecStart=/usr/bin/stdbuf -oL -eL /usr/bin/uxplay -n ${HL_HOST} -nh -p -s 1920x1080@60 -fps 60 -vsync no -srgb no -vd vah264dec -vc vapostproc -vs waylandsink -nohold -reset 15
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=sway-session.target

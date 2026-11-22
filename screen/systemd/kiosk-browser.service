@@ -1,0 +1,17 @@
+[Unit]
+Description=Chromium kiosk shell (dashboard + fireplace), workspace 1
+PartOf=sway-session.target
+After=sway-session.target
+
+[Service]
+ExecStart=/snap/bin/chromium --kiosk --class=kiosk-shell --ozone-platform=wayland \
+  --user-data-dir=%h/snap/chromium/common/kiosk-shell \
+  --remote-debugging-port=9222 --remote-allow-origins=http://127.0.0.1:9222 \
+  --autoplay-policy=no-user-gesture-required --noerrdialogs --disable-session-crashed-bubble --disable-infobars \
+  --password-store=basic --no-first-run --check-for-update-interval=31536000 --enable-features=VaapiVideoDecoder --disable-features=Translate,TranslateUI --disable-translate \
+  http://127.0.0.1:8090/shell
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=sway-session.target

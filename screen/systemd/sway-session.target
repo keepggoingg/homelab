@@ -1,0 +1,4 @@
+[Unit]
+Description=sway kiosk session
+BindsTo=graphical-session.target
+Wants=kiosk-browser.service kiosk-youtube.service kiosk-spotify.service screenctl.service uxplay.service

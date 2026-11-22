@@ -1,0 +1,19 @@
+# secrets and local state: never in git
+**/.env
+**/secrets/
+**/data/
+**/__pycache__/
+config/homelab.env
+config/public.env
+config/settings.json
+cloudflared/config.yml
+cloudflared/*.json
+cloudflared/cert.pem
+
+# personal overlay: tracked by the private repo (bin/private-git), not this one
+.git-private/
+CLAUDE.private.md
+apps/docs/site/
+apps/n8n/workflows/
+apps/upwork-agent/
+private/

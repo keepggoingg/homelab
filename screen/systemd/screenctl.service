@@ -1,0 +1,13 @@
+[Unit]
+Description=Built-in display controller (HTTP :8090)
+PartOf=sway-session.target
+After=sway-session.target
+
+[Service]
+ExecStart=/usr/bin/python3 /srv/homelab/screen/screenctl.py
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=sway-session.target

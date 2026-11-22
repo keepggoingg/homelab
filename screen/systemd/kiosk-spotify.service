@@ -1,0 +1,17 @@
+[Unit]
+Description=Spotify web player in Google Chrome (Spotify Connect target), workspace 4
+PartOf=sway-session.target
+After=sway-session.target
+
+[Service]
+ExecStart=/usr/bin/google-chrome --kiosk --class=kiosk-spotify --ozone-platform=wayland \
+  --user-data-dir=%h/.config/kiosk-spotify \
+  --remote-debugging-port=9224 --remote-allow-origins=http://127.0.0.1:9224 \
+  --autoplay-policy=no-user-gesture-required --noerrdialogs --disable-session-crashed-bubble --disable-infobars \
+  --password-store=basic --no-first-run --no-default-browser-check --disable-features=Translate,TranslateUI \
+  https://open.spotify.com/
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=sway-session.target

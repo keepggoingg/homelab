@@ -1,0 +1,9 @@
+# Rendered to cloudflared/config.yml by `bin/homelab render` (/etc/cloudflared/config.yml links to it).
+tunnel: ${CF_TUNNEL_ID}
+credentials-file: /etc/cloudflared/${CF_TUNNEL_ID}.json
+ingress:
+  - hostname: "${DOMAIN}"
+    service: http://localhost:80
+  - hostname: "*.${DOMAIN}"
+    service: http://localhost:80
+  - service: http_status:404

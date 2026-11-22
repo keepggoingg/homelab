@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>homelab-shell</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;500;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Direction C "Widgets" (StandBy-like): black ground, big rounded tiles, white type. */
+  :root { --tile: #161616; --tile2: #2a2a2a; --ink: #fff; --mute: #9a9a9a; --dim: #4a4a4a; --r: 44px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #000; color: var(--ink); font-family: "Manrope", "Noto Sans", sans-serif; overflow: hidden; cursor: none; user-select: none; }
+  .grid { height: 100%; padding: 40px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .tile { background: var(--tile); border-radius: var(--r); padding: 40px; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+  .wide { grid-column: span 2; }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .title { font-size: 26px; font-weight: 700; }
+  .sub { font-size: 22px; color: var(--mute); }
+
+  .clock-tile { padding: 48px 56px; justify-content: space-between; }
+  .date { font-size: 30px; font-weight: 500; color: var(--mute); }
+  .clock { font-size: 290px; font-weight: 800; line-height: .8; letter-spacing: -12px; font-variant-numeric: tabular-nums; }
+
+  .weather { justify-content: space-between; }
+  .temp { font-size: 150px; font-weight: 300; line-height: .85; letter-spacing: -6px; }
+  .cond { font-size: 28px; font-weight: 500; }
+
+  .music { padding: 32px; gap: 22px; }
+  .cover { flex: 1; min-height: 0; border-radius: 26px; background: var(--tile2) center / cover no-repeat; }
+  .track { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .track > div { min-width: 0; }
+  .t-name { font-size: 28px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t-artist { font-size: 22px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pp { width: 64px; height: 64px; border-radius: 32px; background: #fff; flex: none; display: flex; align-items: center; justify-content: center; }
+  .prog { height: 5px; border-radius: 3px; background: var(--tile2); overflow: hidden; } .prog i { display: block; height: 100%; background: #fff; }
+  .days { display: flex; flex-direction: column; gap: 16px; margin-top: 18px; }
+  .day { display: grid; grid-template-columns: 1fr 120px 70px; align-items: center; gap: 14px; font-size: 24px; }
+  .day span:first-child { color: var(--mute); }
+  .range { height: 6px; border-radius: 3px; background: var(--tile2); position: relative; } .range i { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: #fff; }
+  .day span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .server { justify-content: space-between; }
+  .rings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .ring { display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 22px; color: var(--mute); }
+  .ring .r { width: 116px; height: 116px; border-radius: 58px; display: flex; align-items: center; justify-content: center; }
+  .ring .r b { width: 92px; height: 92px; border-radius: 46px; background: var(--tile); display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #fff; }
+
+  .list { display: flex; flex-direction: column; gap: 16px; margin-top: 22px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 24px; white-space: nowrap; }
+  .row span:first-child { display: flex; align-items: center; gap: 14px; overflow: hidden; text-overflow: ellipsis; }
+  .row span:first-child::before { content: ""; flex: none; width: 12px; height: 12px; border-radius: 6px; background: #fff; }
+  .row.off span:first-child::before { background: var(--dim); }
+  .row span:last-child { color: var(--mute); font-size: 22px; }
+
+  .claude { padding: 40px 48px; gap: 16px; }
+  .claude .dot { width: 14px; height: 14px; border-radius: 7px; background: var(--dim); }
+  .claude.live .dot { background: #fff; animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .msgs { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; overflow: hidden; -webkit-mask-image: linear-gradient(transparent, #000 60px); }
+  .msg { font-size: 26px; line-height: 1.4; max-width: 820px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; max-width: 640px; background: var(--tile2); border-radius: 26px 26px 8px 26px; padding: 14px 24px; }
+  .msg.tool { font-size: 22px; color: var(--mute); }
+  .empty { font-size: 24px; color: var(--mute); }
+
+  .dock { position: fixed; left: 40px; right: 40px; bottom: 40px; z-index: 3; display: flex; gap: 16px; padding: 16px; border-radius: 40px;
+    background: rgba(22,22,22,.92); backdrop-filter: blur(20px); opacity: 0; transform: translateY(24px); transition: opacity .3s, transform .3s; pointer-events: none; }
+  body.remote .dock { opacity: 1; transform: none; pointer-events: auto; }
+  .dock button { flex: 1; height: 84px; border: 0; border-radius: 28px; background: var(--tile2); color: #fff; font: 700 26px "Manrope", sans-serif; }
+  .dock button.on { box-shadow: inset 0 0 0 3px #fff; }
+  .dock button.focus { background: #fff; color: #000; }
+
+  #fire { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; opacity: 0; pointer-events: none; transition: opacity .6s; z-index: 2; }
+  body.fireplace #fire { opacity: 1; pointer-events: auto; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="grid">
+  <section class="tile wide clock-tile">
+    <div class="date" id="date"></div>
+    <div class="clock" id="time">--:--</div>
+  </section>
+
+  <section class="tile weather">
+    <div class="head"><div class="title" id="wname">Weather</div><span id="wicon"></span></div>
+    <div class="temp" id="wt">--°</div>
+    <div><div class="cond" id="wc">Loading weather</div><div class="sub" id="ws"></div></div>
+  </section>
+
+  <section class="tile music" id="music" style="display:none">
+    <div class="cover" id="cover"></div>
+    <div class="track">
+      <div><div class="t-name" id="tname"></div><div class="t-artist" id="tartist"></div></div>
+      <div class="pp" id="pp"></div>
+    </div>
+    <div class="prog"><i id="tprog" style="width:0"></i></div>
+  </section>
+  <section class="tile" id="forecast">
+    <div class="head"><div class="title">Next days</div><div class="sub" id="sunset"></div></div>
+    <div class="days" id="days"></div>
+  </section>
+
+  <section class="tile server">
+    <div class="head"><div class="title">Server</div><div class="sub" id="up"></div></div>
+    <div class="rings" id="rings"></div>
+    <div class="sub" id="sysline"></div>
+  </section>
+
+  <section class="tile">
+    <div class="head"><div class="title">Home</div><div class="sub" id="wifi"></div></div>
+    <div class="list" id="home"></div>
+  </section>
+
+  <section class="tile wide claude" id="claude">
+    <div class="head" style="justify-content:flex-start; gap:14px"><span class="dot"></span><div class="title">Claude</div><div class="sub" id="cs">no active session</div></div>
+    <div class="msgs" id="msgs"><div class="empty">Start a homelab session in the Claude app and the conversation shows up here.</div></div>
+  </section>
+</div>
+
+<nav class="dock">
+  <button data-mode="dashboard">Dashboard</button>
+  <button data-mode="fireplace">Fireplace</button>
+  <button data-mode="youtube">YouTube</button>
+  <button data-screen="off">Screen off</button>
+</nav>
+<video id="fire" src="/media/fireplace.mp4" loop playsinline preload="auto"></video>
+
+<script>
+const $ = id => document.getElementById(id);
+// /settings on the control server edits these (config/settings.json); reloaded every minute
+let CFG = {location_name: "", latitude: null, longitude: null, timezone: "", probe_label: "", host: ""};
+async function config() {
+  try {
+    const prev = JSON.stringify([CFG.latitude, CFG.longitude, CFG.timezone]);
+    CFG = await (await fetch("/api/config")).json();
+    $("wname").textContent = CFG.location_name || "Weather";
+    if (JSON.stringify([CFG.latitude, CFG.longitude, CFG.timezone]) !== prev) weather();
+  } catch (e) {}
+}
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]);
+const WMO = {0:"Clear",1:"Mostly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Rime fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",56:"Freezing drizzle",57:"Freezing drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",66:"Freezing rain",67:"Freezing rain",71:"Light snow",73:"Snow",75:"Heavy snow",77:"Snow grains",80:"Showers",81:"Showers",82:"Heavy showers",85:"Snow showers",86:"Heavy snow showers",95:"Thunderstorm",96:"Thunderstorm, hail",99:"Thunderstorm, hail"};
+const S = 'fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"';
+const ICON = {
+  sun: `<svg width="64" height="64" viewBox="0 0 24 24" ${S} aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>`,
+  moon: `<svg width="64" height="64" viewBox="0 0 24 24" ${S} aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>`,
+  part: `<svg width="64" height="64" viewBox="0 0 24 24" ${S} aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M9 2.5v1.3M2.5 9h1.3M4.4 4.4l.9.9M14.2 9h1.3M13.6 4.4l-.9.9"/><path d="M19 20H10a3.4 3.4 0 1 1 .9-6.7A4.3 4.3 0 0 1 19.4 14 3 3 0 0 1 19 20z"/></svg>`,
+  cloud: `<svg width="64" height="64" viewBox="0 0 24 24" ${S} aria-hidden="true"><path d="M17 18H7a4 4 0 1 1 1-7.9A5 5 0 0 1 17.5 9 4.5 4.5 0 0 1 17 18z"/></svg>`,
+  rain: `<svg width="64" height="64" viewBox="0 0 24 24" ${S} aria-hidden="true"><path d="M17 14H7a4 4 0 1 1 1-7.9A5 5 0 0 1 17.5 5 4.5 4.5 0 0 1 17 14z"/><path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3"/></svg>`,
+  snow: `<svg width="64" height="64" viewBox="0 0 24 24" ${S} aria-hidden="true"><path d="M17 14H7a4 4 0 1 1 1-7.9A5 5 0 0 1 17.5 5 4.5 4.5 0 0 1 17 14z"/><path d="M8 18h.01M12 19h.01M16 18h.01M10 21h.01M14 21h.01"/></svg>`,
+};
+const iconFor = (c, day) => c <= 1 ? (day ? ICON.sun : ICON.moon) : c === 2 ? ICON.part : c <= 48 ? ICON.cloud : (c >= 71 && c <= 77) || c === 85 || c === 86 ? ICON.snow : ICON.rain;
+
+function clock() {
+  const d = new Date();
+  $("time").textContent = d.toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"});
+  $("date").textContent = d.toLocaleDateString("en-GB", {weekday: "long", day: "numeric", month: "long"});
+}
+
+async function weather() {
+  if (CFG.latitude == null) return;
+  try {
+    const w = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${CFG.latitude}&longitude=${CFG.longitude}&current=temperature_2m,apparent_temperature,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,sunset&forecast_days=5&timezone=${encodeURIComponent(CFG.timezone || "auto")}`)).json();
+    const c = w.current;
+    $("wt").textContent = Math.round(c.temperature_2m) + "°";
+    $("wc").textContent = WMO[c.weather_code] || "";
+    $("ws").textContent = `Low ${Math.round(w.daily.temperature_2m_min[0])}°, high ${Math.round(w.daily.temperature_2m_max[0])}°`;
+    $("wicon").innerHTML = iconFor(c.weather_code, c.is_day);
+    $("sunset").textContent = "Sunset " + w.daily.sunset[0].slice(11, 16);
+    const lo = Math.min(...w.daily.temperature_2m_min), hi = Math.max(...w.daily.temperature_2m_max), span = hi - lo || 1;
+    $("days").innerHTML = w.daily.time.map((d, i) => {
+      const a = (w.daily.temperature_2m_min[i] - lo) / span * 100, b = (w.daily.temperature_2m_max[i] - lo) / span * 100;
+      const n = i === 0 ? "Today" : new Date(d).toLocaleDateString("en-GB", {weekday: "long"});
+      return `<div class="day"><span>${n}</span><div class="range"><i style="left:${a}%;right:${100 - b}%"></i></div><span>${Math.round(w.daily.temperature_2m_max[i])}°</span></div>`;
+    }).join("");
+  } catch (e) { $("wc").textContent = "Weather unavailable"; }
+}
+
+const ring = (label, pct) => `<div class="ring"><div class="r" style="background:conic-gradient(#fff ${pct}%, #2e2e2e 0)"><b>${Math.round(pct)}%</b></div>${label}</div>`;
+async function stats() {
+  try {
+    const s = await (await fetch("/api/stats")).json();
+    const cpu = Math.min(100, s.load[0] / s.cpus * 100);
+    $("rings").innerHTML = ring("CPU", cpu) + ring("Memory", s.mem_used / s.mem_total * 100) + ring("Disk", s.disk_used / s.disk_total * 100);
+    const h = Math.floor(s.uptime / 3600);
+    $("up").textContent = "up " + (h >= 24 ? Math.floor(h / 24) + "d " + (h % 24) + "h" : h + "h " + Math.floor(s.uptime % 3600 / 60) + "m");
+    const bat = {Charging: "charging", Discharging: "on battery", Full: "full", "Not charging": "plugged in"}[s.battery_status] || "";
+    $("sysline").textContent = [s.temp ? Math.round(s.temp) + "°C" : null, s.battery ? `battery ${s.battery}% ${bat}` : null, s.ping != null ? `ping ${Math.round(s.ping)} ms` : "offline"].filter(Boolean).join(", ");
+    $("wifi").textContent = s.lan_devices != null ? `${s.lan_devices} on Wi-Fi` : "";
+    const rows = [
+      ...(s.tailscale || []).map(d => [d.name, d.online ? "online" : "offline", d.online]),
+      ...(s.bluetooth || []).map(b => [b, "connected", true]),
+      ...(CFG.probe_label ? [[CFG.probe_label, s.site == null ? "checking" : s.site ? "online" : "unreachable", !!s.site]] : []),
+      ...s.containers.filter(([n]) => !/hello/.test(n)).map(([n, st]) => [n, st.startsWith("Up") ? "running" : "stopped", st.startsWith("Up")]),
+    ].slice(0, 6);
+    $("home").innerHTML = rows.map(([n, st, ok]) => `<div class="row ${ok ? "" : "off"}"><span>${esc(n)}</span><span>${esc(st)}</span></div>`).join("");
+    setActive(s.state.mode);
+  } catch (e) {}
+}
+
+const toSec = t => (t || "").split(":").reduce((a, v) => a * 60 + (+v || 0), 0);
+async function music() {
+  try {
+    const m = await (await fetch("/api/spotify")).json();
+    $("music").style.display = m.active ? "" : "none";
+    $("forecast").style.display = m.active ? "none" : "";
+    if (!m.active) return;
+    $("cover").style.backgroundImage = m.cover ? `url("${m.cover.replace(/"/g, "")}")` : "none";
+    $("tname").textContent = m.title || "";
+    $("tartist").textContent = m.artists || "";
+    $("pp").innerHTML = m.playing
+      ? '<svg width="22" height="22" viewBox="0 0 24 24" fill="#000" aria-hidden="true"><rect x="5" y="4" width="5" height="16" rx="1"/><rect x="14" y="4" width="5" height="16" rx="1"/></svg>'
+      : '<svg width="24" height="24" viewBox="0 0 24 24" fill="#000" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>';
+    const d = toSec(m.duration); $("tprog").style.width = d ? (toSec(m.position) / d * 100) + "%" : "0";
+  } catch (e) {}
+}
+
+async function claude() {
+  try {
+    const c = await (await fetch("/api/claude")).json();
+    $("claude").classList.toggle("live", !!c.live);
+    if (!c.messages || !c.messages.length) return;
+    const ago = Math.round((Date.now() - new Date(c.updated)) / 60000);
+    $("cs").textContent = c.live ? `working on ${CFG.host || "the server"}` : ago < 1 ? "just now" : ago < 60 ? `${ago} min ago` : "session ended";
+    $("msgs").innerHTML = c.messages.slice(-6).map(m => `<div class="msg ${m.role}">${esc(m.text)}</div>`).join("");
+  } catch (e) {}
+}
+
+/* modes + remote: HomeKit remote (via screenctl), air mouse or the laptop keyboard */
+const fire = $("fire"), buttons = [...document.querySelectorAll(".dock button")];
+let focus = -1, remoteTimer = 0, mode = "dashboard";
+function setActive(m) { mode = m; buttons.forEach(b => b.classList.toggle("on", b.dataset.mode === m)); }
+function paint() { buttons.forEach((b, i) => b.classList.toggle("focus", i === focus)); }
+function activate(b) { fetch(b.dataset.mode ? "/api/mode/" + b.dataset.mode : "/api/screen/" + b.dataset.screen, {method: "POST"}); }
+window.setMode = m => {
+  document.body.classList.toggle("fireplace", m === "fireplace");
+  if (m === "fireplace") fire.play().catch(() => {}); else setTimeout(() => fire.pause(), 700);
+  setActive(m); focus = -1; paint(); document.body.classList.remove("remote");
+};
+window.remote = key => {
+  document.body.classList.add("remote"); clearTimeout(remoteTimer);
+  remoteTimer = setTimeout(() => { document.body.classList.remove("remote"); focus = -1; paint(); }, 8000);
+  if (focus < 0) { focus = Math.max(0, buttons.findIndex(b => b.dataset.mode === mode)); if (key !== "back") return paint(); }
+  if (key === "left" || key === "up") focus = (focus + buttons.length - 1) % buttons.length;
+  else if (key === "right" || key === "down") focus = (focus + 1) % buttons.length;
+  else if (key === "select") return activate(buttons[focus]);
+  else if (key === "back") { focus = -1; document.body.classList.remove("remote"); if (mode !== "dashboard") fetch("/api/mode/dashboard", {method: "POST"}); }
+  paint();
+};
+const KEYMAP = {ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", Enter: "select", Escape: "back", Backspace: "back", BrowserBack: "back", GoBack: "back"};
+addEventListener("keydown", e => { if (KEYMAP[e.key]) { e.preventDefault(); remote(KEYMAP[e.key]); } });
+buttons.forEach(b => b.onclick = () => activate(b));
+fire.onclick = () => fetch("/api/mode/dashboard", {method: "POST"});
+
+clock(); config(); stats(); music(); claude();
+setInterval(config, 60000); setInterval(clock, 1000); setInterval(stats, 3000); setInterval(music, 2000); setInterval(claude, 2000); setInterval(weather, 15 * 60000);
+</script>
+</body>
+</html>

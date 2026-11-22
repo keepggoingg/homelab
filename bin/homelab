@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""homelab: config helper.
+
+  bin/homelab setup     create config/homelab.env from the example (keeps existing values),
+                        generate SETTINGS_TOKEN, link every compose project's .env to it, render
+  bin/homelab render    fill templates (cloudflared/config.yml, config/public.env) from config/homelab.env
+  bin/homelab apply     render, restart cloudflared if its config changed, `docker compose up -d`
+                        for traefik and every apps/<name> (only changed containers are recreated)
+  bin/homelab check     list keys that are documented but empty
+"""
+import os, secrets, subprocess, sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+import hlconfig as c  # noqa: E402
+
+TEMPLATES = [(c.ROOT / "cloudflared/config.yml.tmpl", c.ROOT / "cloudflared/config.yml")]
+
+
+def projects():
+    dirs = [c.ROOT / "traefik"] + sorted(p.parent for p in (c.ROOT / "apps").glob("*/compose.yml"))
+    return [d for d in dirs if (d / "compose.yml").exists()]
+
+
+def link_envs():
+    for d in projects():
+        link, target = d / ".env", os.path.relpath(c.ENV_FILE, d)
+        if link.is_symlink():
+            if os.readlink(link) == target:
+                continue
+            link.unlink()
+        elif link.exists():
+            # an app-local .env from before: fold its keys in (existing homelab.env values win)
+            old = c.read_env(link)
+            have = c.read_env()
+            c.write_env({k: v for k, v in old.items() if not have.get(k)})
+            merged = c.read_env()
+            missing = [k for k, v in old.items() if merged.get(k) != v and not have.get(k)]
+            if missing:
+                sys.exit(f"{link}: could not merge {missing}, left in place")
+            link.unlink()
+            print(f"merged {link.relative_to(c.ROOT)} into config/homelab.env")
+        link.symlink_to(target)
+        print(f"linked {link.relative_to(c.ROOT)} -> {target}")
+
+
+def setup():
+    have = c.read_env()
+    fill = {k["key"]: k["default"] for k in c.schema() if k["key"] not in have}
+    if not have.get("SETTINGS_TOKEN"):
+        fill["SETTINGS_TOKEN"] = secrets.token_urlsafe(24)
+        print("generated SETTINGS_TOKEN (read it with: grep ^SETTINGS_TOKEN= config/homelab.env)")
+    if fill or not c.ENV_FILE.exists():
+        c.write_env(fill)
+    link_envs()
+    empty = check(quiet=True)
+    if empty:
+        print("still empty:", ", ".join(empty))
+    render()
+
+
+def check(quiet=False):
+    env = c.read_env()
+    empty = [k["key"] for k in c.schema() if not env.get(k["key"])]
+    if not quiet:
+        print("all keys set" if not empty else "empty: " + ", ".join(empty))
+    return empty
+
+
+def render():
+    env, changed = c.read_env(), []
+    if c.write_public_env(env):
+        changed.append(c.PUBLIC_ENV)
+        print("rendered config/public.env")
+    for tmpl, out in TEMPLATES:
+        try:
+            if c.render(tmpl, out, env):
+                changed.append(out)
+                print(f"rendered {out.relative_to(c.ROOT)}")
+        except KeyError as e:
+            sys.exit(f"{tmpl.relative_to(c.ROOT)}: {e.args[0]} is not set in config/homelab.env")
+    return changed
+
+
+def run(cmd, **kw):
+    print("$", " ".join(cmd), flush=True)
+    return subprocess.run(cmd, **kw).returncode
+
+
+def apply():
+    link_envs()
+    changed, rc = render(), 0
+    cf = c.ROOT / "cloudflared/config.yml"
+    if cf in changed and Path("/etc/cloudflared/config.yml").exists():
+        rc |= run(["sudo", "-n", "systemctl", "restart", "cloudflared"])
+    for d in projects():
+        rc |= run(["docker", "compose", "up", "-d", "--remove-orphans"], cwd=d)
+    sys.exit(rc)
+
+
+if __name__ == "__main__":
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    {"setup": setup, "render": render, "apply": apply, "check": check}.get(cmd, lambda: sys.exit(__doc__))()

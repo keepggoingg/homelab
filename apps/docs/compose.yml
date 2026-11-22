@@ -1,0 +1,18 @@
+# Private docs (homelab guide). Reachable only by the laptop name / IPs over Tailscale or the LAN,
+# never on *.$DOMAIN, because a guide usually has private details (IPs, addresses).
+# Put the HTML in apps/docs/site/guide/ (gitignored).
+services:
+  docs:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./site:/usr/share/nginx/html:ro
+    mem_limit: 32m
+    networks: [proxy]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.docs.rule=(Host(`${HL_HOST}`) || Host(`${HL_HOST}.local`) || Host(`${HL_TAILSCALE_IP}`) || Host(`${HL_LAN_IP}`)) && PathPrefix(`/guide`)
+      - traefik.http.services.docs.loadbalancer.server.port=80
+networks:
+  proxy:
+    external: true
