@@ -53,6 +53,11 @@
   input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:var(--fg); margin-top:-8px; border:3px solid var(--bg); }
   input[type=range]::-moz-range-thumb { width:18px; height:18px; border-radius:50%; background:var(--fg); border:3px solid var(--bg); }
   [hidden] { display:none !important; }
+  .links { display:flex; flex-wrap:wrap; gap:8px; margin-top:28px; }
+  .links a { flex:1 1 auto; text-align:center; border:1px solid var(--line); border-radius:12px; padding:12px 14px;
+             color:var(--fg); text-decoration:none; font-size:15px; }
+  .links a:active { background:var(--line); }
+  .links a span { color:var(--dim); margin-left:4px; }
   .vlabel { color:var(--dim); font-size:12px; margin-top:2px; display:flex; justify-content:space-between; }
 </style>
 </head>
@@ -95,14 +100,14 @@
 </div>
 <form id="f"><input id="url" type="url" placeholder="Video link" required><button>▶</button></form>
 </div>
-<div id="noscreen" class="grid" hidden>
-  <button data-go="/dashboard">Dashboard</button>
-  <button data-go="/settings">Settings</button>
-  <button data-go=":5678">n8n</button>
-  <button data-go="/guide/" data-port="80">Start page</button>
-</div>
+<div id="noscreen" hidden></div>
 <div id="msg"></div>
-<p style="margin-top:28px"><a href="/settings">Settings</a></p>
+<nav class="links" id="links">
+  <a href="/dashboard">Dashboard</a>
+  <a id="l-n8n" href="#" hidden>n8n <span>↗</span></a>
+  <a id="l-guide" href="#" hidden>Start page</a>
+  <a href="/settings">Settings</a>
+</nav>
 <script>
 const $ = id => document.getElementById(id);
 const msg = t => $("msg").textContent = t;
@@ -132,7 +137,12 @@ async function refresh() {
 
 /* tab title: the song while music plays, otherwise "Remote · <host>" */
 let HOST = "homelab";
-fetch("/api/config").then(r => r.json()).then(c => { HOST = c.host || HOST; title(); }).catch(() => {});
+fetch("/api/config").then(r => r.json()).then(c => {
+  HOST = c.host || HOST; title();
+  if (c.n8n_url) { $("l-n8n").href = c.n8n_url; $("l-n8n").hidden = false; }
+  // the start page is LAN / Tailscale only: link it when this page is opened by host name or IP
+  if (location.port === "8090") { $("l-guide").href = `${location.protocol}//${location.hostname}/guide/`; $("l-guide").hidden = false; }
+}).catch(() => {});
 function title() {
   document.title = spot.active && spot.playing ? `▶ ${spot.title} · ${spot.artists}` : `Remote · ${HOST}`;
 }
@@ -179,10 +189,6 @@ document.querySelectorAll("[data-step]").forEach(b => b.onclick = async () => sh
 $("mute").onclick = async () => showVol(await post("volume/mute"));
 
 document.querySelectorAll("[data-a]").forEach(b => b.onclick = () => call(b.dataset.a));
-document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => {
-  const g = b.dataset.go, port = g.startsWith(":") ? g.slice(1) : b.dataset.port;
-  location.href = port ? `${location.protocol}//${location.hostname}${port === "80" ? "" : ":" + port}${g.startsWith(":") ? "/" : g}` : g;
-});
 $("f").onsubmit = e => { e.preventDefault(); call("play", new URLSearchParams({url: $("url").value})); };
 refresh(); spotify(); volume();
 setInterval(refresh, 5000); setInterval(spotify, 2000); setInterval(volume, 3000);

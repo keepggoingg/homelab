@@ -146,7 +146,7 @@ def dashboard_config():
     domain = env.get("DOMAIN", "")
     return dict(s, timezone=s["timezone"] or env.get("TZ", ""), host=env.get("HL_HOST", ""),
                 probe_url=s["probe_url"] or (f"https://{domain}/" if domain else ""),
-                probe_label=s["probe_label"] or domain)
+                probe_label=s["probe_label"] or domain, n8n_url=derived(env)["N8N_BASE_URL"])
 
 
 def write_public_env(env=None):
