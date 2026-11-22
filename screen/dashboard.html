@@ -332,7 +332,7 @@ async function agenda() {
     const cls = e.all_day ? "" : en.getTime() < now ? "past" : s.getTime() <= now ? "now" : "";
     groups.get(k).items.push(`<div class="ev ${cls}"><i style="background:${esc(e.color || "#fff")}"></i>`
       + `<span class="tm">${e.all_day ? "all day" : cls === "now" ? "now" : hm(s)}</span>`
-      + `<span class="tt">${esc(e.title)}<small>${esc(e.calendar)}${e.location ? " · " + esc(e.location) : ""}</small></span></div>`);
+      + `<span class="tt">${esc(e.title)}<small>${esc(/^(calendar|calendrier|kalender|koledar)$/i.test(e.calendar) && e.account ? e.account : e.calendar)}${e.location ? " · " + esc(e.location) : ""}</small></span></div>`);
   }
   $("ag").innerHTML = [...groups.values()].map(g => `<div class="ag-day"><h3>${esc(g.label)}</h3>${g.items.join("")}</div>`).join("")
     || '<div class="empty">Nothing on the calendar.</div>';
