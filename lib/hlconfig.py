@@ -24,6 +24,12 @@ DASHBOARD_DEFAULTS = {
     "timezone": "",            # empty = TZ from homelab.env
     "probe_url": "",           # empty = https://$DOMAIN
     "probe_label": "",         # empty = $DOMAIN
+    # page 2: calendar, reminders, notes (sent by clients/macos/homelab-sync)
+    "agenda_days": 7,          # how many days of events
+    "hidden_calendars": "",    # comma list of calendar names (or "Account / Calendar") to hide
+    "reminder_lists": "",      # comma list of reminder lists to show; empty = all
+    "notes": "",               # comma list of Apple Notes titles to show, in this order
+    "page_seconds": 30,        # switch dashboard pages every N seconds; 0 = stay on page 1
 }
 
 
@@ -125,6 +131,10 @@ def write_settings(updates):
             raise ValueError(f"unknown setting {k!r}")
         if isinstance(DASHBOARD_DEFAULTS[k], float):
             v = float(v)
+        elif isinstance(DASHBOARD_DEFAULTS[k], int):
+            v = int(float(v))
+            if v < 0 or v > 3650:
+                raise ValueError(f"{k} out of range")
         s[k] = v
     _atomic_write(SETTINGS_FILE, json.dumps(s, indent=2) + "\n", 0o644)
     return s

@@ -399,6 +399,16 @@ def doctor(args=()):
            "starts at boot" + (" (lingering)" if linger else " (tty1 auto-login)" if autologin else ": not until you log in"),
            "" if linger or autologin else "sudo loginctl enable-linger $USER")
 
+    snap = Path.home() / ".local/state/homelab/push/apple.json"
+    if snap.exists():
+        import time
+        age = (time.time() - snap.stat().st_mtime) / 3600
+        r.line("ok" if age < 6 else "warn", f"calendar/reminders/notes snapshot: {age:.1f} h old",
+               "" if age < 6 else "is the Mac asleep? log: ~/Library/Logs/homelab-sync.log on the Mac")
+    else:
+        r.line("info", "no calendar/reminders/notes snapshot yet (dashboard page 2)",
+               f"on your Mac: clients/macos/install.sh http://{env.get('HL_HOST') or 'localhost'}:8090")
+
     r.section("this machine")
     ts = env.get("HL_TAILSCALE_IP", "")
     if shutil.which("tailscale"):

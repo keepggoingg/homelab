@@ -46,6 +46,8 @@ Machine-specific facts (hardware, IPs, accounts, devices) are in CLAUDE.private.
 - Everything under *.$DOMAIN is PUBLIC on the internet. Admin UIs must not be exposed without auth: put a
   Cloudflare Access app with an owner-only policy in front. n8n uses apps/n8n/hooks/cf-access-sso.js to turn a
   verified Cf-Access-Jwt-Assertion (CF_ACCESS_TEAM / CF_ACCESS_AUD) into an n8n session.
+- Dashboard page 2 (calendar, reminders, notes): clients/macos/homelab-sync on the owner's Mac POSTs a snapshot to
+  /api/push/apple (X-Push-Token = PUSH_TOKEN) every 5 min; stored in ~/.local/state/homelab/push/. Filters in settings.json.
 - Mind RAM: check `free -h` / `docker stats --no-stream` before adding heavy services.
 
 ## Firewall

@@ -72,13 +72,42 @@
   .dock button.on { box-shadow: inset 0 0 0 3px #fff; }
   .dock button.focus { background: #fff; color: #000; }
 
+  /* pages: 1 = clock, weather, server, Claude; 2 = calendar, reminders, notes */
+  .page { position: absolute; inset: 0; transition: opacity .7s ease; }
+  .page.off { opacity: 0; pointer-events: none; }
+  .dots { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 10px; z-index: 1; }
+  .dots i { width: 8px; height: 8px; border-radius: 4px; background: var(--dim); transition: background .4s; }
+  .dots i.on { background: #fff; }
+  .tall { grid-row: span 2; }
+  .agenda { gap: 6px; }
+  .ag { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 26px; margin-top: 18px;
+        -webkit-mask-image: linear-gradient(#000 85%, transparent); }
+  .ag-day h3 { font-size: 22px; font-weight: 700; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 12px; }
+  .ev { display: grid; grid-template-columns: 6px 130px 1fr; gap: 18px; align-items: baseline; padding: 8px 0; font-size: 28px; }
+  .ev i { align-self: stretch; border-radius: 3px; }
+  .ev .tm { color: var(--mute); font-size: 24px; font-variant-numeric: tabular-nums; }
+  .ev .tt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+  .ev .tt small { display: block; font-size: 20px; color: var(--mute); font-weight: 400; }
+  .ev.now .tm { color: #fff; font-weight: 700; }
+  .ev.past { opacity: .45; }
+  .rems { columns: 2; column-gap: 40px; margin-top: 22px; flex: 1; min-height: 0; overflow: hidden; }
+  .rm { break-inside: avoid; display: grid; grid-template-columns: 26px 1fr; gap: 16px; align-items: start; padding: 7px 0; font-size: 26px; }
+  .rm b { width: 24px; height: 24px; border-radius: 12px; border: 3px solid var(--c, #fff); margin-top: 5px; }
+  .rm span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rm small { display: block; font-size: 19px; color: var(--mute); }
+  .rm.overdue small { color: #ff9b85; }
+  .notes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 40px; flex: 1; min-height: 0; }
+  .note { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 12px; }
+  .note .body { font-size: 24px; line-height: 1.45; white-space: pre-wrap; overflow: hidden; color: #e6e6e6;
+                -webkit-mask-image: linear-gradient(#000 75%, transparent); }
+
   #fire { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; opacity: 0; pointer-events: none; transition: opacity .6s; z-index: 2; }
   body.fireplace #fire { opacity: 1; pointer-events: auto; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<div class="grid">
+<div class="grid page" id="p1">
   <section class="tile wide clock-tile">
     <div class="date" id="date"></div>
     <div class="clock" id="time">--:--</div>
@@ -119,6 +148,19 @@
     <div class="msgs" id="msgs"><div class="empty">Start a homelab session in the Claude app and the conversation shows up here.</div></div>
   </section>
 </div>
+
+<div class="grid page off" id="p2">
+  <section class="tile wide tall agenda">
+    <div class="head"><div class="title">Calendar</div><div class="sub" id="ag-upd"></div></div>
+    <div class="ag" id="ag"><div class="empty">Waiting for the first snapshot from your Mac (clients/macos).</div></div>
+  </section>
+  <section class="tile wide">
+    <div class="head"><div class="title">Reminders</div><div class="sub" id="rem-n"></div></div>
+    <div class="rems" id="rem"></div>
+  </section>
+  <section class="tile wide"><div class="notes" id="notes"></div></section>
+</div>
+<div class="dots" id="dots" hidden><i class="on"></i><i></i></div>
 
 <nav class="dock">
   <button data-mode="dashboard">Dashboard</button>
@@ -241,6 +283,9 @@ window.setMode = m => {
   setActive(m); focus = -1; paint(); document.body.classList.remove("remote");
 };
 window.remote = key => {
+  if (focus < 0 && mode === "dashboard" && (key === "left" || key === "right") && hasAgenda) {
+    return flip(key === "right" ? 1 : -1, true);   // dock hidden: left/right flip pages
+  }
   document.body.classList.add("remote"); clearTimeout(remoteTimer);
   remoteTimer = setTimeout(() => { document.body.classList.remove("remote"); focus = -1; paint(); }, 8000);
   if (focus < 0) { focus = Math.max(0, buttons.findIndex(b => b.dataset.mode === mode)); if (key !== "back") return paint(); }
@@ -255,7 +300,74 @@ addEventListener("keydown", e => { if (KEYMAP[e.key]) { e.preventDefault(); remo
 buttons.forEach(b => b.onclick = () => activate(b));
 fire.onclick = () => fetch("/api/mode/dashboard", {method: "POST"});
 
-clock(); config(); stats(); music(); claude();
+/* page 2: calendar, reminders, notes (snapshot from clients/macos/homelab-sync) */
+let hasAgenda = false, page = 1, pausedUntil = 0, sincePage = 0;
+const dayKey = d => d.toLocaleDateString("en-CA");
+const hm = d => d.toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"});
+function dayLabel(d) {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const diff = Math.round((new Date(d).setHours(0, 0, 0, 0) - t) / 864e5);
+  return diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : d.toLocaleDateString("en-GB", {weekday: "long", day: "numeric", month: "short"});
+}
+function ago(ts) {
+  const m = Math.round((Date.now() / 1000 - ts) / 60);
+  return m < 2 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
+}
+async function agenda() {
+  let a;
+  try { a = await (await fetch("/api/agenda")).json(); } catch (e) { return; }
+  const src = (a.sources || [])[0];
+  hasAgenda = !!src;
+  $("dots").hidden = !hasAgenda;
+  if (!src) return;
+  const stale = Date.now() / 1000 - src.received_at > 3 * 3600;
+  $("ag-upd").textContent = (stale ? `${src.device} offline · ` : "") + `updated ${ago(src.received_at)}`;
+  // events grouped by day; all-day first; multi-day all-day events show on today while they last
+  const now = Date.now(), groups = new Map();
+  for (const e of a.events) {
+    const s = new Date(e.start), en = new Date(e.end);
+    const d = e.all_day && s < new Date() ? new Date() : s;
+    const k = dayKey(d);
+    if (!groups.has(k)) groups.set(k, {label: dayLabel(d), items: []});
+    const cls = e.all_day ? "" : en.getTime() < now ? "past" : s.getTime() <= now ? "now" : "";
+    groups.get(k).items.push(`<div class="ev ${cls}"><i style="background:${esc(e.color || "#fff")}"></i>`
+      + `<span class="tm">${e.all_day ? "all day" : cls === "now" ? "now" : hm(s)}</span>`
+      + `<span class="tt">${esc(e.title)}<small>${esc(e.calendar)}${e.location ? " · " + esc(e.location) : ""}</small></span></div>`);
+  }
+  $("ag").innerHTML = [...groups.values()].map(g => `<div class="ag-day"><h3>${esc(g.label)}</h3>${g.items.join("")}</div>`).join("")
+    || '<div class="empty">Nothing on the calendar.</div>';
+  // reminders
+  const t0 = new Date(); t0.setHours(23, 59, 59, 999);
+  $("rem-n").textContent = a.reminders.length ? `${a.reminders.length} open` : "";
+  $("rem").innerHTML = a.reminders.map(r => {
+    let when = "", over = false;
+    if (r.due_ts) {
+      const d = new Date(r.due_ts * 1000); over = d < (r.due_has_time ? new Date() : new Date(new Date().setHours(0, 0, 0, 0)));
+      when = over ? "overdue" : d <= t0 ? (r.due_has_time ? "today " + hm(d) : "today") : dayLabel(d);
+    }
+    return `<div class="rm ${over ? "overdue" : ""}" style="--c:${esc(r.color || "#fff")}"><b></b>`
+      + `<span>${esc(r.title)}<small>${esc([when, r.list].filter(Boolean).join(" · "))}</small></span></div>`;
+  }).join("") || '<div class="empty">All done.</div>';
+  // notes, in the order chosen in settings
+  $("notes").innerHTML = a.notes.slice(0, 3).map(n =>
+    `<div class="note"><div class="title">${esc(n.name)}</div><div class="body">${esc(n.text)}</div></div>`).join("")
+    || `<div class="empty">${a.wanted_notes.length ? "Notes not found: " + esc(a.wanted_notes.join(", ")) : "Pick notes to show in Settings."}</div>`;
+}
+function flip(dir, manual) {      // two pages, so either direction toggles
+  page = hasAgenda && page === 1 ? 2 : 1;
+  $("p1").classList.toggle("off", page !== 1); $("p2").classList.toggle("off", page !== 2);
+  [...$("dots").children].forEach((d, i) => d.classList.toggle("on", i + 1 === page));
+  sincePage = 0;
+  if (manual) pausedUntil = Date.now() + 120000;   // a manual flip holds the page for 2 minutes
+}
+setInterval(() => {
+  const every = +CFG.page_seconds || 0;
+  if (!every || !hasAgenda || mode !== "dashboard" || document.body.classList.contains("remote") || Date.now() < pausedUntil) return;
+  if (++sincePage >= every) flip(1, false);
+}, 1000);
+
+clock(); config(); stats(); music(); claude(); agenda();
+setInterval(agenda, 30000);
 setInterval(config, 60000); setInterval(clock, 1000); setInterval(stats, 3000); setInterval(music, 2000); setInterval(claude, 2000); setInterval(weather, 15 * 60000);
 </script>
 </body>

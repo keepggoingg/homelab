@@ -140,6 +140,7 @@ Everything after that is optional and `doctor` walks you through it:
 | apps on your own domain, no open ports | domain on Cloudflare → `bin/homelab setup --reconfigure`, then follow `doctor`'s tunnel steps |
 | reach it from anywhere, privately | install [Tailscale](https://tailscale.com/download/linux), `setup --reconfigure` picks up its IP |
 | the built-in screen (dashboard, fireplace, YouTube, AirPlay) | `bin/homelab screen`, then the packages `doctor` lists |
+| your calendars, reminders and notes on the screen | on your Mac: `clients/macos/install.sh http://<host>:8090` (Calendar app accounts incl. Outlook/Exchange, Reminders, chosen Notes) |
 | the Apple Home remote | the HAP-python venv `doctor` prints, then pair the "TV" in the Home app |
 | n8n on `n8n.<domain>` | Cloudflare Access app on it, then `CF_ACCESS_TEAM` + `CF_ACCESS_AUD` (until then n8n stays private: safe by default) |
 | the remote on the internet | Cloudflare Access app on `remote.<domain>` first, then set `SCREEN_REMOTE_HOST` |

@@ -27,6 +27,8 @@ HTTP API on :8090 (LAN + Tailscale only, via ufw):
   GET  /api/volume            {volume 0..1, muted, sink} of the default audio output (PipeWire)
   POST /api/volume            value=0..1 or step=+-0.05;   POST /api/volume/mute  toggles mute
   GET  /api/config            dashboard settings (no secrets)
+  POST /api/push/<source>     snapshot of calendars / reminders / notes from a client (X-Push-Token)
+  GET  /api/agenda            that snapshot, filtered by the dashboard settings (page 2)
   GET  /settings              settings page
   GET|POST /api/settings      read / change config/settings.json and config/homelab.env (X-Settings-Token)
   POST /api/settings/apply    bin/homelab apply: re-render configs, restart what changed (X-Settings-Token)
@@ -552,6 +554,64 @@ def stats():
     }
 
 
+# ---------- agenda: snapshots pushed by clients/macos/homelab-sync ----------
+PUSH_DIR = Path.home() / ".local/state/homelab/push"
+PUSH_MAX = 4 << 20
+
+
+def _csv(v):
+    return [x.strip().lower() for x in str(v or "").split(",") if x.strip()]
+
+
+def push_store(source, body):
+    if not re.fullmatch(r"[a-z0-9-]{1,32}", source):
+        raise ValueError("bad source name")
+    if not isinstance(body, dict):
+        raise ValueError("expected a JSON object")
+    for k in ("events", "reminders", "notes"):
+        if not isinstance(body.get(k, []), list):
+            raise ValueError(f"{k} must be a list")
+    body["received_at"] = time.time()
+    PUSH_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = PUSH_DIR / f".{source}.json"
+    tmp.write_text(json.dumps(body))
+    tmp.chmod(0o600)
+    tmp.replace(PUSH_DIR / f"{source}.json")
+    return {"ok": True, "events": len(body.get("events", [])), "reminders": len(body.get("reminders", [])),
+            "notes": len(body.get("notes", []))}
+
+
+def agenda():
+    cfg = hlconfig.read_settings()
+    hidden, lists, wanted = _csv(cfg["hidden_calendars"]), _csv(cfg["reminder_lists"]), _csv(cfg["notes"])
+    horizon = time.time() + max(1, int(cfg["agenda_days"])) * 86400
+    events, reminders, notes, sources = [], [], {}, []
+    for f in sorted(PUSH_DIR.glob("*.json")):
+        try:
+            d = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        sources.append({"source": f.stem, "device": d.get("device", ""), "received_at": d.get("received_at")})
+        for e in d.get("events", []):
+            cal, acct = str(e.get("calendar", "")), str(e.get("account", ""))
+            if cal.lower() in hidden or f"{acct} / {cal}".lower() in hidden:
+                continue
+            if e.get("end_ts", 0) < time.time() or e.get("start_ts", 0) > horizon:
+                continue
+            events.append(e)
+        for r in d.get("reminders", []):
+            if not lists or str(r.get("list", "")).lower() in lists:
+                reminders.append(r)
+        for n in d.get("notes", []):
+            notes[str(n.get("name", "")).lower()] = n
+    events.sort(key=lambda e: (e.get("start_ts", 0), not e.get("all_day")))
+    # overdue and dated first (soonest), then undated; flagged before the rest within each group
+    reminders.sort(key=lambda r: (r.get("due_ts") is None, r.get("due_ts") or 0, not r.get("flagged")))
+    ordered = [notes[n] for n in wanted if n in notes] if wanted else list(notes.values())
+    return {"events": events, "reminders": reminders[:40], "notes": ordered, "sources": sources,
+            "wanted_notes": [n for n in cfg["notes"].split(",") if n.strip()]}
+
+
 # ---------- settings ----------
 def settings_view():
     env, out = hlconfig.read_env(), []
@@ -662,6 +722,8 @@ class H(BaseHTTPRequestHandler):
             return self.send(200, (HERE / "settings.html").read_bytes(), "text/html")
         if path == "/api/config":
             return self.send(200, hlconfig.dashboard_config())
+        if path == "/api/agenda":
+            return self.send(200, agenda())
         if path == "/api/settings":
             return self.send(200, settings_view()) if self.authorized() else self.deny()
         if path in ("/shell", "/dashboard"):
@@ -681,6 +743,16 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path.rstrip("/")
         try:
+            if path.startswith("/api/push/"):
+                token = hlconfig.read_env().get("PUSH_TOKEN", "")
+                given = self.headers.get("X-Push-Token", "")
+                if not token or not hmac.compare_digest(token.encode(), given.encode()):
+                    return self.send(401, {"error": "wrong or missing push token"})
+                n = int(self.headers.get("Content-Length") or 0)
+                if n > PUSH_MAX:
+                    return self.send(413, {"error": "snapshot too large"})
+                body = json.loads(self.rfile.read(n) or b"{}")
+                return self.send(200, push_store(path.rsplit("/", 1)[1], body))
             if path.startswith("/api/settings"):
                 if not self.authorized():
                     return self.deny()

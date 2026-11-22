@@ -68,6 +68,16 @@
   <label><span class="k">Status check URL</span><div class="help">Checked every 2 minutes for the Home tile. Empty = https://DOMAIN/.</div><input data-d="probe_url" type="url"></label>
   <label><span class="k">Status check label</span><div class="help">Empty = DOMAIN.</div><input data-d="probe_label"></label>
 
+  <h2>Calendar, reminders, notes</h2>
+  <p class="note">Sent by <code>clients/macos/homelab-sync</code> on your Mac every 5 minutes. They show on the dashboard's second page. <span id="seen"></span></p>
+  <label><span class="k">Notes to show</span><div class="help">Apple Notes titles, comma separated, in display order (up to 3 fit).</div><input data-d="notes" placeholder="Pantry, Shopping ideas"></label>
+  <label><span class="k">Hide calendars</span><div class="help">Calendar names, or "Account / Calendar" when two accounts share a name. Comma separated.</div><input data-d="hidden_calendars" placeholder="Birthdays"></label>
+  <label><span class="k">Reminder lists</span><div class="help">Lists to show, comma separated. Empty = all lists.</div><input data-d="reminder_lists" placeholder="Reminders, Shopping"></label>
+  <div class="two">
+    <label><span class="k">Days of events</span><input data-d="agenda_days" inputmode="numeric"></label>
+    <label><span class="k">Switch pages every (s)</span><div class="help">0 = stay on page 1</div><input data-d="page_seconds" inputmode="numeric"></label>
+  </div>
+
   <h2>Infrastructure</h2>
   <p class="note">Changing these can take services offline (domain, tunnel, Cloudflare Access). Secrets are never sent back to this page: leave a secret empty to keep it.</p>
   <div id="env"></div>
@@ -105,6 +115,12 @@ function showLogin(err) {
 
 function render(d) {
   data = d;
+  fetch("/api/agenda").then(r => r.json()).then(a => {
+    const src = (a.sources || [])[0];
+    const cals = [...new Set(a.events.map(e => e.calendar))].sort();
+    $("seen").textContent = src ? `Last snapshot from ${src.device}${cals.length ? "; calendars with events: " + cals.join(", ") : ""}.`
+                                : "No snapshot yet.";
+  }).catch(() => {});
   fetch("/api/config").then(r => r.json()).then(c => { if (c.host) document.title = `Settings · ${c.host}`; }).catch(() => {});
   document.querySelectorAll("[data-d]").forEach(i => { i.value = d.dashboard[i.dataset.d] ?? ""; i.dataset.orig = i.value; i.classList.remove("changed"); });
   $("env").innerHTML = d.env.map(e => `
