@@ -30,7 +30,7 @@
 | **kiosk**       | Chromium `--kiosk`, driven over the DevTools protocol by `screenctl.py`           |
 | **dashboard**   | plain HTML, no framework, no build step · weather by [Open-Meteo]                 |
 | **modes**       | dashboard · fireplace · YouTube TV (cast target) · AirPlay ([UxPlay]) · mpv       |
-| **remote**      | phone page · Apple Home TV remote ([HAP-python]) · air mouse · keyboard           |
+| **remote**      | phone page (Spotify, volume, modes) · Apple TV Remote + iPhone volume keys ([HAP-python]) |
 | **proxy**       | Traefik v3, Docker labels, one `compose.yml` per app                              |
 | **ingress**     | Cloudflare Tunnel (no open ports) · Cloudflare Access in front of admin UIs       |
 | **automations** | n8n + Postgres, SSO through Cloudflare Access, MCP server for Claude Code         |
@@ -44,8 +44,8 @@
 <table>
 <tr>
 <td width="50%" valign="top">
-<img src="docs/remote.png" alt="Phone remote: dashboard, fireplace, YouTube, stop video, screen on/off, play a link">
-<p align="center"><sub><b>remote</b> · <code>:8090</code> · switch modes, play any link, screen off</sub></p>
+<img src="docs/remote.png" alt="Phone remote: Spotify now playing with previous, play/pause, next and volume, then screen modes">
+<p align="center"><sub><b>remote</b> · <code>:8090</code> · now playing, volume, modes, play any link</sub></p>
 </td>
 <td width="50%" valign="top">
 <img src="docs/settings.png" alt="Settings page: city search, coordinates, time zone, infrastructure keys">

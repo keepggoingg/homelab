@@ -20,6 +20,8 @@ HTTP API on :8090 (LAN + Tailscale only, via ufw):
   POST /api/mode/spotify      show the web player (to log in once with the laptop keyboard)
   GET  /api/claude            latest Claude Code session transcript (for the dashboard)
   POST /api/screen/<on|off>
+  GET  /api/volume            {volume 0..1, muted, sink} of the default audio output (PipeWire)
+  POST /api/volume            value=0..1 or step=+-0.05;   POST /api/volume/mute  toggles mute
   GET  /api/config            dashboard settings (no secrets)
   GET  /settings              settings page
   GET|POST /api/settings      read / change config/settings.json and config/homelab.env (X-Settings-Token)
@@ -205,6 +207,8 @@ def press(key):
         if key == "back":
             STATE["playing"] = None
         return mpv_cmd(MPV_KEYS.get(key, ["cycle", "pause"]))
+    if key == "playpause" and STATE["mode"] in ("dashboard", "fireplace") and spotify_state().get("active"):
+        return spotify_control("playpause")   # Apple TV remote play/pause -> Spotify when it's what plays
     if STATE["mode"] == "youtube":
         if key == "back" and yt_at_root():
             return set_mode("dashboard")
@@ -440,6 +444,39 @@ def spotify_control(action):
     js(SPOT, f"document.querySelector('[data-testid=\"{SPOT_KEYS[action]}\"]').click()")
 
 
+# ---------- volume: default PipeWire sink (speaker), covers Spotify, YouTube, AirPlay ----------
+SINK = "@DEFAULT_AUDIO_SINK@"
+
+
+def volume_state():
+    out = subprocess.run(["wpctl", "get-volume", SINK], capture_output=True, text=True, timeout=5).stdout
+    m = re.search(r"Volume:\s*([\d.]+)", out)
+    name = ""
+    try:
+        ins = subprocess.run(["wpctl", "inspect", SINK], capture_output=True, text=True, timeout=5).stdout
+        n = re.search(r'node\.description = "([^"]*)"', ins) or re.search(r'node\.nick = "([^"]*)"', ins)
+        name = n.group(1) if n else ""
+    except Exception:
+        pass
+    return {"volume": float(m.group(1)) if m else None, "muted": "[MUTED]" in out, "sink": name}
+
+
+def volume_set(value=None, step=None):
+    if step is not None:
+        step = max(-0.5, min(0.5, float(step)))
+        arg = f"{abs(step):.2f}{'+' if step >= 0 else '-'}"
+    else:
+        arg = f"{max(0.0, min(1.0, float(value))):.2f}"
+    subprocess.run(["wpctl", "set-volume", "-l", "1.0", SINK, arg], timeout=5, check=True)
+    subprocess.run(["wpctl", "set-mute", SINK, "0"], timeout=5)
+    return volume_state()
+
+
+def volume_mute():
+    subprocess.run(["wpctl", "set-mute", SINK, "toggle"], timeout=5, check=True)
+    return volume_state()
+
+
 # ---------- stats ----------
 def read(path, default=""):
     try:
@@ -598,6 +635,8 @@ class H(BaseHTTPRequestHandler):
             return self.send(200, claude_feed())
         if path == "/api/spotify":
             return self.send(200, spotify_state())
+        if path == "/api/volume":
+            return self.send(200, volume_state())
         return self.send(404, {"error": "not found"})
 
     def do_POST(self):
@@ -624,6 +663,13 @@ class H(BaseHTTPRequestHandler):
                 if action not in SPOT_KEYS:
                     return self.send(400, {"error": "unknown action"})
                 spotify_control(action)
+            elif path == "/api/volume":
+                p = self.params()
+                if "step" not in p and "value" not in p:
+                    return self.send(400, {"error": "value=0..1 or step=+-0.05"})
+                return self.send(200, volume_set(p.get("value"), p.get("step")))
+            elif path == "/api/volume/mute":
+                return self.send(200, volume_mute())
             elif path == "/api/stop":
                 stop()
             elif path.startswith("/api/key/"):

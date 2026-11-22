@@ -2,26 +2,86 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0d0b">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>homelab screen</title>
 <style>
-  :root { --bg:#0e0d0b; --fg:#ece6da; --dim:#8b8478; --line:#2a2722; --warm:#e8a75b; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.4 -apple-system, "Noto Sans", sans-serif; padding:28px 20px; max-width:480px; margin:auto; }
+  :root { --bg:#0e0d0b; --fg:#ece6da; --dim:#8b8478; --line:#2a2722; --tile:#171512; --warm:#e8a75b; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0 auto; background:var(--bg); color:var(--fg); font:17px/1.4 -apple-system, "Noto Sans", sans-serif;
+         padding:28px 20px calc(28px + env(safe-area-inset-bottom)); max-width:480px; }
   h1 { font-size:22px; font-weight:600; margin:0 0 4px; }
-  p { color:var(--dim); margin:0 0 24px; font-size:14px; }
+  p { color:var(--dim); margin:0 0 20px; font-size:14px; }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  button { background:none; border:1px solid var(--line); color:var(--fg); font:inherit; padding:18px 8px; border-radius:12px; }
+  button { background:none; border:1px solid var(--line); color:var(--fg); font:inherit; padding:18px 8px; border-radius:12px; cursor:pointer; }
   button:active { background:var(--line); }
   button.on { border-color:var(--warm); color:var(--warm); }
-  form { display:flex; gap:8px; margin:24px 0 8px; }
-  input { flex:1; min-width:0; background:#191714; border:1px solid var(--line); color:var(--fg); font:inherit; padding:14px; border-radius:12px; }
+  form { display:flex; gap:8px; margin:20px 0 8px; }
+  input[type=url] { flex:1; min-width:0; background:#191714; border:1px solid var(--line); color:var(--fg); font:inherit; padding:14px; border-radius:12px; }
   #msg { color:var(--dim); font-size:14px; min-height:20px; margin-top:12px; }
+  a { color:var(--warm); }
+
+  /* now playing */
+  .np { background:var(--tile); border:1px solid var(--line); border-radius:18px; padding:16px; margin:0 0 20px; }
+  .np-top { display:flex; gap:14px; align-items:center; }
+  .cover { width:72px; height:72px; border-radius:10px; background:#2a2722 center/cover no-repeat; flex:none; }
+  .meta { min-width:0; }
+  .t { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .a { color:var(--dim); font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .src { color:var(--dim); font-size:12px; letter-spacing:.06em; text-transform:uppercase; margin-bottom:2px; }
+  .bar { height:4px; border-radius:2px; background:var(--line); margin:14px 0 4px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:0; background:var(--fg); transition:width .5s linear; }
+  .times { display:flex; justify-content:space-between; color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; }
+  .transport { display:flex; justify-content:center; align-items:center; gap:28px; margin:6px 0 4px; }
+  .transport button { border:none; padding:10px; border-radius:50%; display:grid; place-items:center; }
+  .transport .pp { width:60px; height:60px; background:var(--fg); }
+  .transport .pp svg { fill:var(--bg); }
+  .transport svg { fill:var(--fg); }
+  .idle { color:var(--dim); font-size:15px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .idle button { padding:10px 14px; font-size:15px; }
+
+  .vol { display:flex; align-items:center; gap:10px; margin-top:14px; }
+  .vol button { padding:8px 12px; border-radius:10px; font-size:18px; line-height:1; min-width:44px; }
+  .vol button.muted { color:var(--warm); border-color:var(--warm); }
+  input[type=range] { flex:1; -webkit-appearance:none; appearance:none; height:28px; background:none; }
+  input[type=range]::-webkit-slider-runnable-track { height:6px; border-radius:3px; background:linear-gradient(to right, var(--fg) var(--p, 0%), var(--line) var(--p, 0%)); }
+  input[type=range]::-moz-range-track { height:6px; border-radius:3px; background:var(--line); }
+  input[type=range]::-moz-range-progress { height:6px; border-radius:3px; background:var(--fg); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:var(--fg); margin-top:-8px; border:3px solid var(--bg); }
+  input[type=range]::-moz-range-thumb { width:18px; height:18px; border-radius:50%; background:var(--fg); border:3px solid var(--bg); }
+  [hidden] { display:none !important; }
+  .vlabel { color:var(--dim); font-size:12px; margin-top:2px; display:flex; justify-content:space-between; }
 </style>
 </head>
 <body>
 <h1>Screen</h1>
 <p id="state">…</p>
+
+<section class="np" aria-label="Now playing">
+  <div id="np-on" hidden>
+    <div class="np-top">
+      <div class="cover" id="cover"></div>
+      <div class="meta"><div class="src">Spotify</div><div class="t" id="title"></div><div class="a" id="artist"></div></div>
+    </div>
+    <div class="bar"><i id="prog"></i></div>
+    <div class="times"><span id="pos"></span><span id="dur"></span></div>
+    <div class="transport">
+      <button data-s="prev" aria-label="Previous"><svg width="28" height="28" viewBox="0 0 24 24"><path d="M6 5h2v14H6zM9.5 12 19 5v14z"/></svg></button>
+      <button data-s="playpause" class="pp" aria-label="Play or pause" id="pp"></button>
+      <button data-s="next" aria-label="Next"><svg width="28" height="28" viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM5 5l9.5 7L5 19z"/></svg></button>
+    </div>
+  </div>
+  <div id="np-off" class="idle"><span>Nothing playing on Spotify</span><button data-a="mode/spotify">Open player</button></div>
+  <div class="vol">
+    <button id="mute" aria-label="Mute">🔈</button>
+    <input type="range" id="vol" min="0" max="100" step="1" value="0" aria-label="Volume">
+    <button data-step="-0.05" aria-label="Volume down">−</button>
+    <button data-step="0.05" aria-label="Volume up">+</button>
+  </div>
+  <div class="vlabel"><span id="sink"></span><span id="vpct"></span></div>
+</section>
+
 <div class="grid">
   <button data-a="mode/dashboard">Dashboard</button>
   <button data-a="mode/fireplace">Fireplace</button>
@@ -32,22 +92,72 @@
 </div>
 <form id="f"><input id="url" type="url" placeholder="Video link" required><button>▶</button></form>
 <div id="msg"></div>
-<p style="margin-top:28px"><a href="/settings" style="color:var(--warm)">Settings</a></p>
+<p style="margin-top:28px"><a href="/settings">Settings</a></p>
 <script>
-const msg = t => document.getElementById("msg").textContent = t;
+const $ = id => document.getElementById(id);
+const msg = t => $("msg").textContent = t;
+const PLAY = '<svg width="26" height="26" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>';
+const PAUSE = '<svg width="24" height="24" viewBox="0 0 24 24"><rect x="5" y="4" width="5" height="16" rx="1"/><rect x="14" y="4" width="5" height="16" rx="1"/></svg>';
+const toSec = t => (t || "").split(":").reduce((a, v) => a * 60 + (+v || 0), 0);
+
+async function post(path, body) {
+  const r = await fetch("/api/" + path, {method: "POST", body, headers: body ? {"Content-Type": "application/json"} : {}});
+  return r.json();
+}
 async function call(path, body) {
-  const r = await fetch("/api/" + path, {method:"POST", body});
-  const j = await r.json(); msg(j.error ? "Error: " + j.error : "Done"); refresh();
+  const j = await post(path, body); msg(j.error ? "Error: " + j.error : "Done"); refresh();
 }
 async function refresh() {
-  const s = (await (await fetch("/api/stats")).json()).state;
-  document.getElementById("state").textContent =
-    "Mode: " + s.mode + (s.playing ? ", playing a video" : "") + ", screen " + s.screen;
-  document.querySelectorAll("[data-a^=mode]").forEach(b => b.classList.toggle("on", b.dataset.a === "mode/" + s.mode));
+  try {
+    const s = (await (await fetch("/api/stats")).json()).state;
+    $("state").textContent = "Mode: " + s.mode + (s.playing ? ", playing a video" : "") + ", screen " + s.screen;
+    document.querySelectorAll("[data-a^=mode]").forEach(b => b.classList.toggle("on", b.dataset.a === "mode/" + s.mode));
+  } catch (e) {}
 }
+
+/* Spotify */
+let spot = {};
+async function spotify() {
+  try { spot = await (await fetch("/api/spotify")).json(); } catch (e) { spot = {}; }
+  $("np-on").hidden = !spot.active; $("np-off").hidden = !!spot.active;
+  if (!spot.active) return;
+  $("cover").style.backgroundImage = spot.cover ? `url("${spot.cover.replace(/"/g, "")}")` : "none";
+  $("title").textContent = spot.title || ""; $("artist").textContent = spot.artists || "";
+  $("pp").innerHTML = spot.playing ? PAUSE : PLAY;
+  $("pos").textContent = spot.position || ""; $("dur").textContent = spot.duration || "";
+  const d = toSec(spot.duration); $("prog").style.width = d ? Math.min(100, toSec(spot.position) / d * 100) + "%" : "0";
+}
+document.querySelectorAll("[data-s]").forEach(b => b.onclick = async () => {
+  if (b.dataset.s === "playpause") { spot.playing = !spot.playing; $("pp").innerHTML = spot.playing ? PAUSE : PLAY; }
+  await post("spotify/" + b.dataset.s); setTimeout(spotify, 400);
+});
+
+/* volume */
+let dragging = false, sendTimer = 0;
+function showVol(v) {
+  if (v.volume == null) return;
+  const p = Math.round(v.volume * 100);
+  if (!dragging) $("vol").value = p;
+  $("vol").style.setProperty("--p", $("vol").value + "%");
+  $("vpct").textContent = v.muted ? "muted" : p + "%";
+  $("sink").textContent = v.sink || "";
+  $("mute").textContent = v.muted ? "🔇" : p < 34 ? "🔈" : p < 67 ? "🔉" : "🔊";
+  $("mute").classList.toggle("muted", !!v.muted);
+}
+async function volume() { try { showVol(await (await fetch("/api/volume")).json()); } catch (e) {} }
+$("vol").oninput = () => {
+  dragging = true; $("vol").style.setProperty("--p", $("vol").value + "%"); $("vpct").textContent = $("vol").value + "%";
+  clearTimeout(sendTimer);
+  sendTimer = setTimeout(async () => showVol(await post("volume", JSON.stringify({value: $("vol").value / 100}))), 80);
+};
+$("vol").onchange = () => { setTimeout(() => dragging = false, 300); };
+document.querySelectorAll("[data-step]").forEach(b => b.onclick = async () => showVol(await post("volume", JSON.stringify({step: +b.dataset.step}))));
+$("mute").onclick = async () => showVol(await post("volume/mute"));
+
 document.querySelectorAll("[data-a]").forEach(b => b.onclick = () => call(b.dataset.a));
-document.getElementById("f").onsubmit = e => { e.preventDefault(); call("play", new URLSearchParams({url: document.getElementById("url").value})); };
-refresh();
+$("f").onsubmit = e => { e.preventDefault(); call("play", new URLSearchParams({url: $("url").value})); };
+refresh(); spotify(); volume();
+setInterval(refresh, 5000); setInterval(spotify, 2000); setInterval(volume, 3000);
 </script>
 </body>
 </html>

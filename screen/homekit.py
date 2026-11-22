@@ -5,6 +5,8 @@ Shows up in the Apple Home app as a TV:
   power        -> screen on/off
   inputs       -> Dashboard / Fireplace / YouTube
   Remote (Control Centre) -> arrows/select/back/play-pause via screenctl
+                             (play/pause drives Spotify while the dashboard or fireplace is on)
+  iPhone volume buttons    -> speaker volume, while the Remote is open (TelevisionSpeaker)
 Talks to screenctl on 127.0.0.1:8090. Pairing state lives in ~/.local/state/homekit.
 """
 import json, logging, os, signal, urllib.request
@@ -23,8 +25,9 @@ REMOTE = {4: "up", 5: "down", 6: "left", 7: "right", 8: "select", 9: "back", 10:
 log = logging.getLogger("homekit")
 
 
-def api(path, method="POST"):
-    req = urllib.request.Request(API + path, method=method, data=b"" if method == "POST" else None)
+def api(path, method="POST", body=None):
+    data = json.dumps(body).encode() if body is not None else (b"" if method == "POST" else None)
+    req = urllib.request.Request(API + path, method=method, data=data)
     return json.load(urllib.request.urlopen(req, timeout=10))
 
 
@@ -52,12 +55,26 @@ class Display(Accessory):
             src.configure_char("IsConfigured", value=1)
             src.configure_char("CurrentVisibilityState", value=0)
             tv.add_linked_service(src)
+        # volume buttons in the Remote: relative steps on the default audio output
+        spk = self.add_preload_service("TelevisionSpeaker", ["Mute", "Active", "VolumeControlType", "VolumeSelector"])
+        spk.configure_char("Active", value=1)
+        spk.configure_char("VolumeControlType", value=1)          # relative
+        spk.configure_char("Mute", value=False, setter_callback=self.set_mute)
+        spk.configure_char("VolumeSelector", setter_callback=self.volume_step)
+        tv.add_linked_service(spk)
 
     def set_active(self, value):
         api("screen/" + ("on" if value else "off"))
 
     def set_input(self, value):
         api("mode/" + INPUTS[value - 1][1])
+
+    def volume_step(self, value):
+        api("volume", body={"step": 0.05 if value == 0 else -0.05})   # 0 = increment, 1 = decrement
+
+    def set_mute(self, value):
+        if bool(value) != bool(api("volume", "GET").get("muted")):
+            api("volume/mute")
 
     def remote_key(self, value):
         if value in REMOTE:
