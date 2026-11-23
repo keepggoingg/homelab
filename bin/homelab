@@ -313,6 +313,15 @@ def doctor(args=()):
         r.line("bad" if unlinked else "ok", "every app's .env links to it" if not unlinked else
                "not linked: " + ", ".join(unlinked), "bin/homelab setup" if unlinked else "")
 
+    r.section("power")
+    sleepers = ("sleep.target", "suspend.target", "hibernate.target", "hybrid-sleep.target",
+                "suspend-then-hibernate.target")
+    awake = [u for u in sleepers if sh("systemctl", "is-enabled", u) != "masked"]
+    r.line("bad" if awake else "ok", "sleep is impossible (sleep targets masked)" if not awake else
+           "the server can still sleep: " + ", ".join(awake),
+           "" if not awake else "sudo systemctl mask " + " ".join(sleepers) +
+           "   # a sleeping server stops the collectors and the trading bot")
+
     r.section("docker")
     if not shutil.which("docker"):
         r.line("bad", "docker not installed", "sudo apt install docker.io docker-compose-v2\n"
