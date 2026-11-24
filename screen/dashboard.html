@@ -130,6 +130,7 @@
   .tbl th { text-align: left; color: var(--mute); font-weight: 500; font-size: calc(20 * var(--u)); padding: 0 calc(12 * var(--u)) calc(10 * var(--u)) 0; }
   .tbl td { padding: calc(10 * var(--u)) calc(12 * var(--u)) calc(10 * var(--u)) 0; border-top: 1px solid #262626; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tbl .num { text-align: right; } .tbl tr.dim td { color: var(--mute); }
+  .tile.stale .b-body, .tile.stale .head .sub { opacity: .4; } .tile.stale .big.alert { color: inherit; }
   .b-line .b-body svg { width: 100%; height: 100%; display: block; }
   .legend { display: flex; gap: calc(22 * var(--u)); font-size: calc(20 * var(--u)); color: var(--mute); white-space: nowrap; }
   .legend i { display: inline-block; width: calc(22 * var(--u)); height: calc(4 * var(--u)); border-radius: 2px; margin-right: calc(9 * var(--u)); vertical-align: middle; }
@@ -632,6 +633,7 @@ function renderBuilt(id) {
       ? `<div class="legend">${get(data, t.field).series.map((s, j) => `<span><i style="background:${esc(s.color || SERIES[j % SERIES.length])}"></i>${esc(s.name)}</span>`).join("")}</div>`
       : esc(t.head_field ? fmt(get(data, t.head_field), t.head_format) : t.head || "");
     tile.querySelector("[data-sub]").innerHTML = sub;
+    tile.classList.toggle("stale", !!(t.dim_field && get(data, t.dim_field)));   // dim_field: grey out old data
     body.innerHTML = b.data ? tileHtml(t, data, body) : '<div class="empty">Loading…</div>';
     for (const big of body.querySelectorAll(".big")) {
       const k = U(); let fs = 118; big.style.fontSize = fs * k + "px";

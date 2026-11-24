@@ -94,7 +94,8 @@ lands in this public repo. Keep the JSON in that project and symlink it in.
 | `bars` | diverging bars around zero | `field` → `[{label, value}]`, `format` |
 | `text` | a paragraph | `field` or `value` |
 
-Every tile also takes `title`, `w`, `h`, and `head` / `head_field` (top-right text). `field` is a dotted path
+Every tile also takes `title`, `w`, `h`, `head` / `head_field` (top-right text) and `dim_field` (truthy =
+the tile is greyed out and loses its alert color, e.g. last week's numbers shown between events). `field` is a dotted path
 into the source's JSON (`market.gap`). Formats: `pct` (signed), `pct_abs`, `int`, `num`, `bytes`, `ago` and
 `until` (epoch seconds, live countdown), `time`, `daytime`.
 
