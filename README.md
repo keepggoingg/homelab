@@ -92,6 +92,7 @@ lands in this public repo. Keep the JSON in that project and symlink it in.
 | `table` | rows × columns | `field` → `[{…, _dim?}]`, `columns: [{key, label, format, digits, width}]`, `max` |
 | `line` | time series, legend, event markers | `field` → `{series: [{name, points: [[x, y]], color?}], markers: [{x, label}], y_format, x_format, x_min, x_max, now}` |
 | `bars` | diverging bars around zero | `field` → `[{label, value}]`, `format` |
+| `cells` | matrix of colored boxes (e.g. one per bot) | `field` → `[{label, value, sub?, tone?: pos\|neg\|flat}]`, `format`, `digits`, `max` (default 64); color from `tone` or the sign of `value`, grid size adapts to the count |
 | `text` | a paragraph | `field` or `value` |
 
 Every tile also takes `title`, `w`, `h`, `head` / `head_field` (top-right text) and `dim_field` (truthy =

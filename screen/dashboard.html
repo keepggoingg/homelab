@@ -182,6 +182,14 @@
     .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .grid > .wide { grid-column: span 2 !important; }
   }
+.cells{display:grid;gap:6px;height:100%;min-height:0}
+.cell{border-radius:10px;padding:.35em .5em;display:flex;flex-direction:column;justify-content:center;min-width:0;overflow:hidden;background:#222}
+.cell .cl{font-size:.72em;color:#cfcfcf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell b{font-size:1.25em;font-weight:600;white-space:nowrap}
+.cell .cs{font-size:.66em;color:#d8d8d8;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell.pos{background:#163d26}.cell.pos b{color:#7ee2a0}
+.cell.neg{background:#47201f}.cell.neg b{color:#ff9a8f}
+.cell.flat b{color:#bdbdbd}
 </style>
 </head>
 <body>
@@ -609,6 +617,17 @@ function tileHtml(t, data, el) {
       return rows.map(r => { const w = Math.abs(r.value) / m * 50;
         return `<div class="bar"><span>${esc(r.label)}</span><div class="trk"><i style="${r.value >= 0 ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`}"></i></div><span>${esc(fmt(r.value, t.format, t.digits))}</span></div>`; }).join("")
         || `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
+    }
+    case "cells": {        // matrix of boxes: [{label, value, sub?, tone?: pos|neg|flat}], colored by tone or sign
+      const rows = (val || []).slice(0, t.max || 64);
+      if (!rows.length) return `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
+      const box = el.getBoundingClientRect(), n = rows.length, ar = Math.max(.5, (box.width || 600) / Math.max(1, box.height || 300));
+      const cols = Math.max(1, Math.min(n, Math.round(Math.sqrt(n * ar * 1.4)))), lines = Math.ceil(n / cols);
+      const fs = Math.max(11, Math.min(26, ((box.height || 300) / lines) * .26));
+      return `<div class="cells" style="grid-template-columns:repeat(${cols},1fr);grid-auto-rows:1fr;font-size:${fs.toFixed(1)}px">`
+        + rows.map(r => { const tone = r.tone || (r.value > 0 ? "pos" : r.value < 0 ? "neg" : "flat");
+          return `<div class="cell ${esc(tone)}"><span class="cl">${esc(r.label)}</span><b>${esc(fmt(r.value, t.format || "num", t.digits ?? 0))}</b>`
+            + (r.sub != null && r.sub !== "" ? `<span class="cs">${esc(r.sub)}</span>` : "") + `</div>`; }).join("") + "</div>";
     }
     case "text": return esc(val ?? "");
   }

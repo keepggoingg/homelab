@@ -639,7 +639,7 @@ PAGES_DIR = Path(os.environ.get("HOMELAB_PAGES_DIR") or Path.home() / ".config/h
 BUILTIN_PAGES = [{"id": "1", "title": "Overview", "builtin": True},
                  {"id": "2", "title": "Calendar", "builtin": True, "optional": True}]
 PAGE_ID = re.compile(r"[a-z][a-z0-9-]{0,31}")
-TILE_TYPES = ("stat", "rows", "table", "line", "bars", "text")
+TILE_TYPES = ("stat", "rows", "table", "line", "bars", "cells", "text")
 _feeds, _feed_locks = {}, {}
 
 
