@@ -64,6 +64,19 @@
   .msg { font-size: calc(26 * var(--u)); line-height: 1.4; max-width: calc(820 * var(--u)); white-space: pre-wrap; overflow-wrap: anywhere; }
   .msg.user { align-self: flex-end; max-width: calc(640 * var(--u)); background: var(--tile2); border-radius: calc(26 * var(--u)) calc(26 * var(--u)) calc(8 * var(--u)) calc(26 * var(--u)); padding: calc(14 * var(--u)) calc(24 * var(--u)); }
   .msg.tool { font-size: calc(22 * var(--u)); color: var(--mute); }
+  .msg.md { white-space: normal; }
+  .msg.md > :first-child { margin-top: 0; } .msg.md > :last-child { margin-bottom: 0; }
+  .msg.md p, .msg.md ul, .msg.md ol, .msg.md pre, .msg.md blockquote, .msg.md h4 { margin: 0 0 calc(10 * var(--u)); }
+  .msg.md h4 { font-size: calc(26 * var(--u)); font-weight: 800; }
+  .msg.md ul, .msg.md ol { padding-left: calc(34 * var(--u)); }
+  .msg.md li + li { margin-top: calc(4 * var(--u)); }
+  .msg.md strong { font-weight: 800; color: #fff; }
+  .msg.md code { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: .85em; background: var(--tile2); border-radius: calc(6 * var(--u)); padding: 0 calc(6 * var(--u)); }
+  .msg.md pre { background: var(--tile2); border-radius: calc(14 * var(--u)); padding: calc(12 * var(--u)) calc(16 * var(--u)); white-space: pre-wrap; font-size: calc(21 * var(--u)); line-height: 1.35; }
+  .msg.md pre code { background: none; padding: 0; font-size: inherit; }
+  .msg.md blockquote { border-left: calc(4 * var(--u)) solid var(--dim); padding-left: calc(16 * var(--u)); color: var(--mute); }
+  .msg.md a { color: inherit; text-decoration: underline; text-decoration-color: var(--dim); }
+  .msg.md hr { border: 0; border-top: 1px solid var(--dim); margin: calc(10 * var(--u)) 0; }
   .empty { font-size: calc(24 * var(--u)); color: var(--mute); }
 
   .dock { position: fixed; left: calc(40 * var(--u)); right: calc(40 * var(--u)); bottom: calc(40 * var(--u)); z-index: 3; display: flex; gap: calc(16 * var(--u)); padding: calc(16 * var(--u)); border-radius: calc(40 * var(--u));
@@ -245,6 +258,38 @@ async function config() {
   } catch (e) {}
 }
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]);
+/* tiny markdown for Claude messages: escape first, then format (no raw HTML gets through) */
+const mdInline = t => t
+  .replace(/`([^`\n]+)`/g, (_, c) => "\u0000" + c + "\u0001")
+  .replace(/\*\*([^*\n]+)\*\*|__([^_\n]+)__/g, (_, a, b) => `<strong>${a || b}</strong>`)
+  .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)|(^|[^_\w])_([^_\n]+)_(?!\w)/g, (_, p1, a, p2, b) => `${p1 ?? p2}<em>${a ?? b}</em>`)
+  .replace(/\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g, "<a>$1</a>")
+  .replace(/\u0000([^\u0001]*)\u0001/g, "<code>$1</code>");
+function md(src) {
+  const out = [], lines = esc(src).split("\n");
+  let list = null, para = [];
+  const flush = () => { if (para.length) out.push(`<p>${mdInline(para.join("<br>"))}</p>`); para = [];
+    if (list) out.push(`<${list.tag}>${list.items.map(i => `<li>${mdInline(i)}</li>`).join("")}</${list.tag}>`); list = null; };
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (/^\s*```/.test(l)) { flush(); const code = []; while (++i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i]);
+      out.push(`<pre><code>${code.join("\n")}</code></pre>`); continue; }
+    let m;
+    if (!l.trim()) { flush(); continue; }
+    if ((m = l.match(/^#{1,6}\s+(.*)/))) { flush(); out.push(`<h4>${mdInline(m[1])}</h4>`); continue; }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) { flush(); out.push("<hr>"); continue; }
+    if ((m = l.match(/^&gt;\s?(.*)/))) { flush(); out.push(`<blockquote>${mdInline(m[1])}</blockquote>`); continue; }
+    if ((m = l.match(/^\s*(?:([-*+])|(\d+)[.)])\s+(.*)/))) {
+      const tag = m[1] ? "ul" : "ol";
+      if (para.length || (list && list.tag !== tag)) flush();
+      (list ??= {tag, items: []}).items.push(m[3]); continue; }
+    if (list && /^\s{2,}\S/.test(l)) { list.items[list.items.length - 1] += " " + l.trim(); continue; }
+    if (list) flush();
+    para.push(l);
+  }
+  flush();
+  return out.join("");
+}
 const WMO = {0:"Clear",1:"Mostly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Rime fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",56:"Freezing drizzle",57:"Freezing drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",66:"Freezing rain",67:"Freezing rain",71:"Light snow",73:"Snow",75:"Heavy snow",77:"Snow grains",80:"Showers",81:"Showers",82:"Heavy showers",85:"Snow showers",86:"Heavy snow showers",95:"Thunderstorm",96:"Thunderstorm, hail",99:"Thunderstorm, hail"};
 const S = 'fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"';
 const ICON = {
@@ -329,7 +374,7 @@ async function claude() {
     if (!c.messages || !c.messages.length) return;
     const ago = Math.round((Date.now() - new Date(c.updated)) / 60000);
     $("cs").textContent = c.live ? `working on ${CFG.host || "the server"}` : ago < 1 ? "just now" : ago < 60 ? `${ago} min ago` : "session ended";
-    $("msgs").innerHTML = c.messages.slice(-6).map(m => `<div class="msg ${m.role}">${esc(m.text)}</div>`).join("");
+    $("msgs").innerHTML = c.messages.slice(-6).map(m => m.role === "assistant" ? `<div class="msg md ${m.role}">${md(m.text)}</div>` : `<div class="msg ${m.role}">${esc(m.text)}</div>`).join("");
   } catch (e) {}
 }
 
