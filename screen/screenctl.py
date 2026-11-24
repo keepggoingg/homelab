@@ -639,7 +639,7 @@ PAGES_DIR = Path(os.environ.get("HOMELAB_PAGES_DIR") or Path.home() / ".config/h
 BUILTIN_PAGES = [{"id": "1", "title": "Overview", "builtin": True},
                  {"id": "2", "title": "Calendar", "builtin": True, "optional": True}]
 PAGE_ID = re.compile(r"[a-z][a-z0-9-]{0,31}")
-TILE_TYPES = ("stat", "rows", "table", "line", "bars", "cells", "text")
+TILE_TYPES = ("stat", "rows", "table", "line", "bars", "cells", "text", "mix", "summary", "heat")
 _feeds, _feed_locks = {}, {}
 
 
@@ -660,13 +660,16 @@ def load_pages():
             for t in tiles:
                 if not isinstance(t, dict) or t.get("type") not in TILE_TYPES:
                     raise ValueError(f"every tile needs a type: {', '.join(TILE_TYPES)}")
+            strip = p.get("strip")
+            if strip is not None and not (isinstance(strip, dict) and strip.get("field")):
+                raise ValueError("strip must be an object with a field")
             src = p.get("source") or {}
             if not isinstance(src, dict):
                 raise ValueError("source must be an object")
             if any(x["id"] == pid for x in pages):
                 raise ValueError(f"duplicate page id {pid!r}")
             pages.append({"id": pid, "title": str(p.get("title") or pid), "order": float(p.get("order", 100)),
-                          "refresh": max(5, int(p.get("refresh", 30))), "tiles": tiles, "source": src,
+                          "refresh": max(5, int(p.get("refresh", 30))), "tiles": tiles, "strip": strip, "source": src,
                           "file": f.name})
         except (OSError, ValueError, TypeError) as e:
             errors.append({"file": f.name, "error": str(e)})
@@ -680,7 +683,7 @@ def page_ids():
 
 def pages_view():
     pages, errors = load_pages()
-    built = [{k: p[k] for k in ("id", "title", "refresh", "tiles")} for p in pages]
+    built = [{k: p[k] for k in ("id", "title", "refresh", "tiles", "strip")} for p in pages]
     return {"pages": BUILTIN_PAGES + built, "errors": errors, "dir": str(PAGES_DIR)}
 
 

@@ -72,7 +72,7 @@ ufw: incoming only from the LAN on 22, 80, 443, 53. Docker-published ports bypas
   ~/.claude/projects/*/*.jsonl) and /api/config every minute.
 - Dashboard pages: 1 overview (built in), 2 calendar (optional, once a client pushed), then the page builder:
   every ~/.config/homelab/pages/*.json (HOMELAB_PAGES_DIR) is a page of tiles (stat, rows, table, line, bars,
-  text) fed by its `source` (command printing JSON, http(s) URL or JSON file), served by /api/pages and
+  text, cells, mix, summary, heat; optional status strip) fed by its `source` (command printing JSON, http(s) URL or JSON file), served by /api/pages and
   /api/pages/<id>, lockable with /api/page/<id>. That directory is outside the repo on purpose: built pages
   belong to the projects that feed them and must not be committed here (nor to the private overlay).
   Format and example: README "dashboard pages", docs/pages/example.json. No API may create pages.

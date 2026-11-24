@@ -193,6 +193,84 @@
 .cell.pos{background:#163d26}.cell.pos b{color:#7ee2a0}
 .cell.neg{background:#47201f}.cell.neg b{color:#ff9a8f}
 .cell.flat b{color:#bdbdbd}
+/* page builder v3: tones, chips, status strip, mix rows, summary, heat, dense tables, grouped cells */
+:root{--pos:#5ee08f;--neg:#ff8a7a;--warn:#ffc98a;--long:#8ab4ff;--short:#ffb86b}
+.pos{color:var(--pos)}.neg{color:var(--neg)}.warn{color:var(--warn)}.mute{color:var(--mute)}.long{color:var(--long)}.short{color:var(--short)}
+.chip{display:inline-block;padding:calc(5 * var(--u)) calc(14 * var(--u));border-radius:999px;font-size:calc(19 * var(--u));font-weight:700;white-space:nowrap;background:#2a2a2a;color:#b5b5b5}
+.chip.good{background:#1f3d2b;color:#7ef0a8}.chip.long{background:#1e2b44;color:#a9c7ff}.chip.short{background:#3d3020;color:#ffc98a}.chip.warn{background:#3d3020;color:#ffc98a}.chip.bad{background:#3d2220;color:#ffa396}
+.grid.has-strip{grid-template-rows:auto repeat(2,minmax(0,1fr))}
+.strip{grid-column:1/-1;background:var(--tile);border-radius:calc(32 * var(--u));padding:calc(24 * var(--u)) calc(40 * var(--u));display:flex;align-items:center;gap:calc(20 * var(--u));font-size:calc(24 * var(--u));white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums}
+.strip .sd{width:calc(16 * var(--u));height:calc(16 * var(--u));border-radius:50%;background:var(--pos);flex:none}
+.strip .sd.warn{background:var(--warn)}.strip .sd.bad{background:var(--neg)}
+.strip .st{font-size:calc(30 * var(--u));font-weight:800}.strip .sm{color:var(--mute)}.strip b{font-weight:800}
+.strip .sgs{margin-left:auto;display:flex;gap:calc(40 * var(--u))}.strip .sg{display:flex;gap:calc(8 * var(--u))}
+.mix{display:flex;flex-direction:column;justify-content:space-between;flex:1;min-height:0;gap:calc(6 * var(--u));margin-top:calc(10 * var(--u))}
+.mix-h,.mix-r{display:grid;grid-template-columns:calc(220 * var(--u)) minmax(0,1fr) calc(120 * var(--u)) calc(250 * var(--u));column-gap:calc(18 * var(--u));align-items:center}
+.mix-h{font-size:calc(16 * var(--u));color:var(--mute);text-transform:uppercase;letter-spacing:.08em}
+.mix-h span:nth-child(n+3),.mix-r .mv,.mix-r .mb{text-align:right}
+.mix-r .mn{font-size:calc(23 * var(--u));font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mix-r .md,.mix-r .mc{font-size:calc(17 * var(--u));color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mix-r .mc{margin-top:calc(5 * var(--u))}.mix-r .chip{font-size:calc(16 * var(--u));padding:calc(4 * var(--u)) calc(12 * var(--u))}
+.mix-r .mv{font-size:calc(28 * var(--u));font-weight:800;font-variant-numeric:tabular-nums}
+.seg{display:flex;height:calc(14 * var(--u));border-radius:calc(7 * var(--u));overflow:hidden;gap:calc(3 * var(--u));background:#2a2a2a}
+.seg i{display:block}.seg i.pos{background:var(--pos)}.seg i.neg{background:var(--neg)}.seg i.idle{background:#3a3a3a}
+.row.has-d span:first-child{display:block;-webkit-line-clamp:unset;font-weight:700}
+.row.has-d span:only-child{max-width:none;white-space:normal;text-align:left;color:#fff;font-size:calc(24 * var(--u))}
+.row small{display:block;font-size:calc(18 * var(--u));color:var(--mute);font-weight:400;margin-top:calc(4 * var(--u));line-height:1.35}
+.row.t-warn span:first-child::before{background:var(--warn)}.row.t-bad span:first-child::before{background:var(--neg)}.row.t-good span:first-child::before{background:var(--pos)}
+.b-foot{margin-top:auto;padding-top:calc(12 * var(--u));font-size:calc(19 * var(--u));color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bars-fill .bar{padding:0;font-size:calc(22 * var(--u))}
+.bars-fill{display:flex;flex-direction:column;justify-content:space-between;flex:1;min-height:0;margin-top:calc(10 * var(--u))}
+.bar small{color:var(--mute);font-size:.78em;margin-left:.4em}
+.bar span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .trk i.pos{background:var(--pos)}.bar .trk i.neg{background:var(--neg)}
+.bar span.pos:last-child{color:var(--pos);font-weight:700}.bar span.neg:last-child{color:var(--neg);font-weight:700}
+.sum{display:flex;flex-direction:column;gap:calc(16 * var(--u));flex:1;min-height:0;margin-top:calc(14 * var(--u));font-variant-numeric:tabular-nums}
+.sum .kp{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:calc(24 * var(--u))}
+.sum .kv{font-size:calc(52 * var(--u));font-weight:800;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sum .kl,.sum .bs,.sum .sn{font-size:calc(20 * var(--u));color:var(--mute)}
+.sum .sb{font-size:calc(62 * var(--u));font-weight:800;line-height:1;letter-spacing:-.03em;white-space:nowrap}
+.sum .sl{display:flex;justify-content:space-between;font-size:calc(20 * var(--u));margin-bottom:calc(8 * var(--u))}
+.sum .sbar{display:flex;height:calc(14 * var(--u));border-radius:calc(7 * var(--u));overflow:hidden;gap:calc(3 * var(--u));margin-bottom:calc(8 * var(--u))}
+.sum .sbar i{display:block}.sum .sbar i.long{background:var(--long)}.sum .sbar i.short{background:var(--short)}
+.sum .push{margin-top:auto}
+.sum .lt{font-size:calc(17 * var(--u));color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:calc(8 * var(--u))}
+.sum .li{display:flex;justify-content:space-between;gap:calc(12 * var(--u));font-size:calc(22 * var(--u));padding:calc(3 * var(--u)) 0}
+.sum .li span:last-child{font-weight:700}
+.sum .tbl{margin-top:0}
+.tbl.dense{font-size:calc(20 * var(--u));margin-top:calc(10 * var(--u))}
+.tbl.dense th{font-size:calc(15 * var(--u));text-transform:uppercase;letter-spacing:.07em;padding-bottom:calc(6 * var(--u))}
+.tbl.dense td{padding:calc(3 * var(--u)) calc(10 * var(--u)) calc(3 * var(--u)) 0;border-top:0}
+.tbl td.pos{color:var(--pos);font-weight:700}.tbl td.neg{color:var(--neg);font-weight:700}
+.tbl tr.grp td{padding-top:calc(16 * var(--u));border-top:0}
+.tbl tbody tr.grp:first-child td{padding-top:calc(4 * var(--u))}
+.tbl .gh{display:flex;align-items:center;gap:calc(14 * var(--u));padding-bottom:calc(6 * var(--u));border-bottom:2px solid #2a2a2a;font-weight:400}
+.tbl .gh b{font-size:calc(24 * var(--u));font-weight:800;color:#fff}.tbl .gh .mute{font-size:calc(18 * var(--u));overflow:hidden;text-overflow:ellipsis}.tbl .gh .chip{margin-left:auto;font-size:calc(17 * var(--u))}
+.tbl tr.tnote td{white-space:normal;color:var(--mute);font-size:calc(18 * var(--u));line-height:1.45;padding-top:calc(6 * var(--u))}
+.tbl tr.tnote .chip{font-size:calc(16 * var(--u));padding:calc(2 * var(--u)) calc(10 * var(--u));border-radius:calc(8 * var(--u));color:#fff;margin-right:calc(10 * var(--u))}
+.tbl small{color:var(--mute);font-size:.8em;font-weight:500;margin-left:.4em}
+.tbl td .chip{font-size:calc(16 * var(--u));padding:calc(1 * var(--u)) calc(10 * var(--u));border-radius:calc(8 * var(--u))}
+.dbar{position:relative;height:calc(14 * var(--u))}
+.dbar::before{content:"";position:absolute;left:50%;top:calc(-5 * var(--u));bottom:calc(-5 * var(--u));width:2px;background:#3a3a3a}
+.dbar i,.hbar i{position:absolute;top:0;bottom:0;border-radius:calc(3 * var(--u))}
+.dbar i.pos{background:var(--pos)}.dbar i.neg{background:var(--neg)}
+.hbar{position:relative;height:calc(12 * var(--u));background:#222;border-radius:calc(6 * var(--u));overflow:hidden}.hbar i{left:0;background:#6f6f6f}
+.csecs{display:flex;flex-wrap:wrap;align-content:flex-start;gap:calc(22 * var(--u)) calc(32 * var(--u));margin-top:calc(16 * var(--u));flex:1;min-height:0;overflow:hidden}
+.csec{display:flex;flex-direction:column;gap:calc(10 * var(--u))}
+.csh{display:flex;gap:calc(12 * var(--u));align-items:baseline;white-space:nowrap}
+.csh b{font-size:calc(18 * var(--u));font-weight:800;text-transform:uppercase;letter-spacing:.08em}.csh span{font-size:calc(18 * var(--u));color:var(--mute)}
+.cgrid{display:grid;gap:calc(8 * var(--u))}
+.csec .cell{height:calc(96 * var(--u));border-radius:calc(18 * var(--u));padding:calc(10 * var(--u)) calc(12 * var(--u));justify-content:space-between;font-size:calc(22 * var(--u))}
+.csec .cell b{color:#fff;font-weight:800}.csec .cell .cl{display:flex;align-items:center;color:#fff;font-weight:700}
+.csec .cell .ro{margin-left:auto;flex:none;width:.5em;height:.5em;border-radius:50%;border:2px solid #fff}
+.wchips{display:flex;flex-wrap:wrap;gap:calc(6 * var(--u))}
+.wchips span{padding:calc(4 * var(--u)) calc(10 * var(--u));border-radius:calc(8 * var(--u));background:#222;color:var(--mute);font-size:calc(16 * var(--u));font-weight:600;white-space:nowrap}
+.heat{display:grid;gap:calc(8 * var(--u));align-items:center;margin-top:calc(16 * var(--u));font-variant-numeric:tabular-nums}
+.heat .hc{font-size:calc(18 * var(--u));color:var(--mute);text-align:center}
+.heat .hl{font-size:calc(18 * var(--u));font-weight:700;line-height:1.2}.heat .hl small{display:block;color:var(--mute);font-weight:500;font-size:calc(16 * var(--u))}
+.heat .hx{height:calc(92 * var(--u));border-radius:calc(16 * var(--u));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(4 * var(--u));background:#242424}
+.heat .hx b{font-size:calc(23 * var(--u));font-weight:800}.heat .hx span{font-size:calc(16 * var(--u));color:rgba(255,255,255,.78)}
+@media (max-aspect-ratio: 1/1), (max-height: 500px) { .grid.has-strip{grid-template-rows:none} .strip{flex-wrap:wrap;white-space:normal} .strip .sgs{margin-left:0;flex-wrap:wrap;gap:calc(16 * var(--u))} }
 </style>
 </head>
 <body>
@@ -608,21 +686,25 @@ function tileHtml(t, data, el) {
         + (label ? `<div class="cond">${esc(label)}</div>` : "") + (sub ? `<div class="sub">${esc(sub)}</div>` : "");
     }
     case "rows":
-      return `<div class="list">${(val || []).slice(0, t.max || 6).map(r => `<div class="row ${r.ok === false ? "off" : ""}"><span>${esc(r.name)}</span><span>${esc(fmt(r.value, r.format))}</span></div>`).join("")}</div>`;
+      if (!(val || []).length && t.empty) return `<div class="empty">${esc(t.empty)}</div>`;
+      return `<div class="list">${(val || []).slice(0, t.max || 6).map(r => `<div class="row ${r.ok === false ? "off" : ""}${r.tone ? " t-" + esc(r.tone) : ""}${r.detail != null ? " has-d" : ""}">`
+        + `<span>${esc(r.name)}${r.detail != null ? `<small>${esc(r.detail)}</small>` : ""}</span>${r.value != null || r.detail == null ? `<span>${esc(fmt(r.value, r.format))}</span>` : ""}</div>`).join("")}</div>`;
     case "table": {
-      const cols = t.columns || [], rows = (val || []).slice(0, t.max || 8);
+      const rows = (val || []).slice(0, t.max || 8);
       if (!rows.length) return `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
-      return `<table class="tbl"><thead><tr>${cols.map(c => `<th class="${c.format && c.format !== "text" ? "num" : ""}" style="${c.width ? "width:" + esc(c.width) : ""}">${esc(c.label ?? c.key)}</th>`).join("")}</tr></thead><tbody>`
-        + rows.map(r => `<tr class="${r._dim ? "dim" : ""}">${cols.map(c => `<td class="${c.format && c.format !== "text" ? "num" : ""}">${esc(fmt(r[c.key], c.format, c.digits))}</td>`).join("")}</tr>`).join("") + "</tbody></table>";
+      return tableHtml(t.columns || [], rows, t);
     }
     case "line": return lineSvg(el, val || {}, t);
     case "bars": {
       const rows = (val || []).slice(0, t.max || 8), m = Math.max(1e-12, ...rows.map(r => Math.abs(r.value)));
-      return rows.map(r => { const w = Math.abs(r.value) / m * 50;
-        return `<div class="bar"><span>${esc(r.label)}</span><div class="trk"><i style="${r.value >= 0 ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`}"></i></div><span>${esc(fmt(r.value, t.format, t.digits))}</span></div>`; }).join("")
-        || `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
+      const lw = t.label_width ? `grid-template-columns:calc(${+t.label_width || 170} * var(--u)) 1fr calc(120 * var(--u))` : "";
+      const html = rows.map(r => { const w = Math.abs(r.value) / m * 50, tn = t.colors ? (r.value >= 0 ? "pos" : "neg") : "";
+        return `<div class="bar" style="${lw}"><span>${esc(r.label)}${r.note ? `<small>${esc(r.note)}</small>` : ""}</span><div class="trk"><i class="${tn}" style="${r.value >= 0 ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`}"></i></div><span class="${tn}">${esc(fmt(r.value, t.format, t.digits))}</span></div>`; }).join("");
+      if (!html) return `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
+      return t.fill ? `<div class="bars-fill">${html}</div>` : html;
     }
     case "cells": {        // matrix of boxes: [{label, value, sub?, tone?: pos|neg|flat, icon?, live?}]
+      if (t.sections) return cellSections(val || [], t);
       const rows = (val || []).slice(0, t.max || 64);
       if (!rows.length) return `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
       const box = el.getBoundingClientRect(), W = box.width || 600, H = box.height || 300, n = rows.length, gap = 6;
@@ -639,8 +721,101 @@ function tileHtml(t, data, el) {
             + (r.sub != null && r.sub !== "" ? `<span class="cs">${esc(r.sub)}</span>` : "") + `</div>`; }).join("") + "</div>";
     }
     case "text": return esc(val ?? "");
+    case "mix": {          // rows: name/detail, segmented count bar, value, chip
+      const rows = (val || []).slice(0, t.max || 8);
+      if (!rows.length) return `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
+      const L = t.labels || [];
+      return `<div class="mix">` + (L.length ? `<div class="mix-h">${[0, 1, 2, 3].map(i => `<span>${esc(L[i] || "")}</span>`).join("")}</div>` : "")
+        + rows.map(r => { const segs = (r.segments || []).filter(s => s.n > 0), n = segs.reduce((a, s) => a + s.n, 0) || 1;
+          return `<div class="mix-r"><div style="min-width:0"><div class="mn">${esc(r.name)}</div><div class="md">${esc(r.detail || "")}</div></div>`
+            + `<div style="min-width:0"><div class="seg">${segs.map(s => `<i class="${esc(s.tone || "idle")}" style="width:${(s.n / n * 100).toFixed(1)}%"></i>`).join("")}</div><div class="mc">${esc(r.counts || "")}</div></div>`
+            + `<div class="mv ${esc(r.tone || "")}">${esc(fmt(r.value, t.format || "pct", t.digits ?? 2))}</div>`
+            + `<div class="mb">${r.chip ? `<span class="chip ${esc(r.chip_tone || "")}">${esc(r.chip)}</span>` : ""}</div></div>`; }).join("") + "</div>";
+    }
+    case "summary": return summaryHtml(val || {}, t);
+    case "heat": return heatHtml(val || {}, t);
   }
   return "";
+}
+const TONES = new Set(["pos", "neg", "warn", "mute", "long", "short", "good", "bad", ""]);
+const tn = v => TONES.has(v || "") ? (v || "") : "";
+function shadeBg(ret, max) {      // background for a return: green/red, stronger with size (max = full strength)
+  if (ret == null || Math.abs(ret) < 1e-5) return "#242424";
+  const a = (0.14 + Math.min(Math.abs(ret), max) / max * 0.36).toFixed(2);
+  return ret > 0 ? `rgba(46,204,113,${a})` : `rgba(255,99,77,${a})`;
+}
+function tableHtml(cols, rows, t) {
+  const isNum = c => c.format && !["text", "bar", "hbar", "pill"].includes(c.format);
+  const scale = {};
+  for (const c of cols) if (c.format === "bar" || c.format === "hbar")
+    scale[c.key] = +c.scale || Math.max(1e-12, ...rows.filter(r => !r._head && !r._note).map(r => Math.abs(+r[c.key] || 0)));
+  const cell = (c, r) => {
+    const v = r[c.key];
+    if (c.format === "bar") {
+      if (v == null) return `<td></td>`;
+      const w = (Math.min(Math.abs(v), scale[c.key]) / scale[c.key] * 50).toFixed(1);
+      return `<td><div class="dbar"><i class="${v >= 0 ? "pos" : "neg"}" style="${v >= 0 ? "left:50%" : "right:50%"};width:${w}%"></i></div></td>`;
+    }
+    if (c.format === "hbar") return `<td><div class="hbar"><i style="width:${(Math.min(Math.abs(+v || 0), scale[c.key]) / scale[c.key] * 100).toFixed(1)}%"></i></div></td>`;
+    if (c.format === "pill") return `<td>${v != null && v !== "" ? `<span class="chip ${tn(r[c.key + "_tone"])}">${esc(v)}</span>` : ""}</td>`;
+    const tone = c.tone ? (r[c.key + "_tone"] != null ? tn(r[c.key + "_tone"]) : typeof v === "number" ? (v > 0 ? "pos" : v < 0 ? "neg" : "") : "") : "";
+    const sub = c.sub_key && r[c.sub_key] ? `<small>${esc(r[c.sub_key])}</small>` : "";
+    return `<td class="${isNum(c) ? "num" : ""} ${tone}">${esc(fmt(v, c.format, c.digits))}${sub}</td>`;
+  };
+  const n = cols.length;
+  return `<table class="tbl${t.dense ? " dense" : ""}"><thead><tr>${cols.map(c => `<th class="${isNum(c) ? "num" : ""}" style="${c.width ? "width:" + esc(c.width) : ""}">${esc(c.label ?? c.key)}</th>`).join("")}</tr></thead><tbody>`
+    + rows.map(r => r._head
+      ? `<tr class="grp"><td colspan="${n}"><div class="gh"><b>${esc(r.title)}</b><span class="mute">${esc(r.sub || "")}</span>${r.chip ? `<span class="chip ${tn(r.chip_tone)}">${esc(r.chip)}</span>` : ""}</div></td></tr>`
+      : r._note
+      ? `<tr class="tnote"><td colspan="${n}">${r.label ? `<span class="chip">${esc(r.label)}</span>` : ""}${esc(r.text || "")}</td></tr>`
+      : `<tr class="${r._dim ? "dim" : ""}">${cols.map(c => cell(c, r)).join("")}</tr>`).join("") + "</tbody></table>";
+}
+function summaryHtml(d, t) {      // any of: kpis, big (+ sub), split bar, list, mini table (tile columns + d.rows)
+  let h = "";
+  if (d.kpis) h += `<div class="kp">${d.kpis.map(k => `<div style="min-width:0"><div class="kv ${tn(k.tone)}">${esc(k.value)}</div><div class="kl">${esc(k.label || "")}</div></div>`).join("")}</div>`;
+  if (d.big != null) h += `<div><div class="sb ${tn(d.big_tone)}">${esc(d.big)}</div>${d.big_sub ? `<div class="bs">${esc(d.big_sub)}</div>` : ""}</div>`;
+  if (d.split) {
+    const a = d.split.a || {}, b = d.split.b || {}, pa = Math.max(0, Math.min(100, +a.pct || 0));
+    h += `<div><div class="sl"><span>${esc(a.label || "")}</span><span>${esc(b.label || "")}</span></div>`
+      + `<div class="sbar"><i class="${tn(a.tone || "long")}" style="width:${pa}%"></i><i class="${tn(b.tone || "short")}" style="width:${100 - pa}%"></i></div>`
+      + (d.split.note ? `<div class="sn">${esc(d.split.note)}</div>` : "") + `</div>`;
+  }
+  if (d.list && d.list.length) h += `<div class="${d.rows ? "" : "push"}">${d.list_title ? `<div class="lt">${esc(d.list_title)}</div>` : ""}`
+    + d.list.map(r => `<div class="li"><span>${esc(r.name)}</span><span class="${tn(r.tone)}">${esc(fmt(r.value, r.format, r.digits))}</span></div>`).join("") + `</div>`;
+  if (d.rows && t.columns) h += d.rows.length ? tableHtml(t.columns, d.rows.slice(0, t.max || 8), t) : `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
+  if (d.foot) h += `<div class="b-foot">${esc(d.foot)}</div>`;
+  return `<div class="sum">${h}</div>`;
+}
+function heatHtml(d, t) {         // {cols: [...], rows: [{label, sub, cells: [{value, sub, ret}]}], max?}
+  const cols = d.cols || [], rows = d.rows || [];
+  if (!rows.length) return `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
+  const max = +d.max || Math.max(1e-9, ...rows.flatMap(r => (r.cells || []).map(c => Math.abs(+c.ret || 0))));
+  const hh = t.cell_height ? `;height:calc(${+t.cell_height} * var(--u))` : "";
+  return `<div class="heat" style="grid-template-columns:calc(92 * var(--u)) repeat(${cols.length},minmax(0,1fr))"><span></span>`
+    + cols.map(c => `<span class="hc">${esc(c)}</span>`).join("")
+    + rows.map(r => `<span class="hl">${esc(r.label)}${r.sub ? `<small>${esc(r.sub)}</small>` : ""}</span>`
+      + cols.map((_, i) => { const c = (r.cells || [])[i];
+        return c ? `<div class="hx" style="background:${shadeBg(c.ret, max)}${hh}"><b>${esc(c.value)}</b><span>${esc(c.sub || "")}</span></div>` : `<div class="hx" style="${hh.slice(1)}"><span>–</span></div>`; }).join("")).join("")
+    + `</div>`;
+}
+function cellSections(secs, t) {  // [{name, summary, cells: [{label, value, sub, ret, open, icon, live}], waiting: [label]}]
+  if (!secs.length) return `<div class="empty">${esc(t.empty || "Nothing to show.")}</div>`;
+  const per = clamp(t.per_row || 9, 1, 20), cw = +t.cell_width || 126, max = +t.shade_max || 0.05;
+  return `<div class="csecs">` + secs.map(s => {
+    const cells = s.cells || [], n = Math.max(1, Math.min(cells.length, per));
+    const gw = `calc(${n * cw + (n - 1) * 8} * var(--u))`;
+    return `<div class="csec"><div class="csh"><b>${esc(s.name)}</b><span>${esc(s.summary || "")}</span></div>`
+      + (cells.length ? `<div class="cgrid" style="grid-template-columns:repeat(${n},calc(${cw} * var(--u)))">` + cells.map(r =>
+        `<div class="cell" style="background:${shadeBg(r.ret, max)}"><span class="cl">${cellIcon(r)}<span style="overflow:hidden;text-overflow:ellipsis">${esc(r.label)}</span>${r.open ? '<span class="ro" title="position open"></span>' : ""}</span>`
+        + `<b>${esc(fmt(r.value, t.format || "num", t.digits ?? 0))}</b>${r.sub != null && r.sub !== "" ? `<span class="cs">${esc(r.sub)}</span>` : ""}</div>`).join("") + `</div>` : "")
+      + ((s.waiting || []).length ? `<div class="wchips" style="max-width:max(${gw}, calc(260 * var(--u)))">${s.waiting.map(w => `<span>${esc(w)}</span>`).join("")}</div>` : "")
+      + `</div>`; }).join("") + `</div>`;
+}
+function stripHtml(d) {           // {tone, title, text, groups: [[{value, label, tone}]], right}
+  if (!d) return "";
+  return `<span class="sd ${tn(d.tone)}"></span><span class="st">${esc(d.title || "")}</span><span class="sm">${esc(d.text || "")}</span><div class="sgs">`
+    + (d.groups || []).map(g => `<span class="sg">${g.map(i => `<span><b class="${tn(i.tone)}">${esc(i.value)}</b> <span class="sm">${esc(i.label || "")}</span></span>`).join('<span class="sm">·</span>')}</span>`).join("")
+    + (d.right ? `<span class="sm">${esc(d.right)}</span>` : "") + `</div>`;
 }
 // cells tile: broker icons by name (no user-supplied SVG is ever inserted, only these constants)
 const CELL_ICONS = {
@@ -655,7 +830,8 @@ function cellIcon(r) {
   return svg + (r && r.live ? '<i class="lv" title="live"></i>' : "");
 }
 function buildPages() {
-  $("built").innerHTML = PAGES.filter(p => !p.builtin).map(p => `<div class="grid page off" data-page="${esc(p.id)}">`
+  $("built").innerHTML = PAGES.filter(p => !p.builtin).map(p => `<div class="grid page off${p.strip ? " has-strip" : ""}" data-page="${esc(p.id)}">`
+    + (p.strip ? `<section class="strip" data-strip></section>` : "")
     + p.tiles.map((t, i) => `<section class="tile b-${esc(t.type)}${clamp(t.w, 1, 4) >= 2 ? " wide" : ""}" style="grid-column:span ${clamp(t.w, 1, 4)};grid-row:span ${clamp(t.h, 1, 2)}" data-tile="${i}">`
       + `<div class="head"><div class="title">${esc(t.title || "")}</div><div class="sub" data-sub></div></div><div class="b-body" data-body></div></section>`).join("")
     + `<div class="b-note" data-note></div></div>`).join("");
@@ -674,12 +850,15 @@ function renderBuilt(id) {
       : esc(t.head_field ? fmt(get(data, t.head_field), t.head_format) : t.head || "");
     tile.querySelector("[data-sub]").innerHTML = sub;
     tile.classList.toggle("stale", !!(t.dim_field && get(data, t.dim_field)));   // dim_field: grey out old data
-    body.innerHTML = b.data ? tileHtml(t, data, body) : '<div class="empty">Loading…</div>';
+    const foot = t.foot_field ? get(data, t.foot_field) : null;
+    body.innerHTML = b.data ? tileHtml(t, data, body) + (foot ? `<div class="b-foot">${esc(foot)}</div>` : "") : '<div class="empty">Loading…</div>';
     for (const big of body.querySelectorAll(".big")) {
       const k = U(); let fs = 118; big.style.fontSize = fs * k + "px";
       while (big.scrollWidth > big.clientWidth && fs > 36) { fs -= 6; big.style.fontSize = fs * k + "px"; }
     }
   });
+  const strip = el.querySelector("[data-strip]");
+  if (strip) strip.innerHTML = b.data ? stripHtml(get(data, b.page.strip.field)) : "";
   el.querySelector("[data-note]").textContent = data._error ? "source error: " + data._error : "";
 }
 async function loadBuilt(id) {

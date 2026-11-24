@@ -94,6 +94,18 @@ lands in this public repo. Keep the JSON in that project and symlink it in.
 | `bars` | diverging bars around zero | `field` → `[{label, value}]`, `format` |
 | `cells` | matrix of colored boxes (e.g. one per bot) | `field` → `[{label, value, sub?, tone?: pos\|neg\|flat}]`, `format`, `digits`, `max` (default 64); color from `tone` or the sign of `value`, grid size adapts to the count |
 | `text` | a paragraph | `field` or `value` |
+| `mix` | rows of name + segmented count bar + value + chip (e.g. strategies: up/down/waiting) | `field` → `[{name, detail, segments: [{n, tone: pos\|neg\|idle}], counts, value, tone, chip, chip_tone: good\|warn\|bad}]`, `format`, `digits`, `labels` (4 column heads) |
+| `summary` | a small report: any of big number, KPIs, two-part split bar, list, mini table | `field` → `{big, big_tone, big_sub, kpis: [{value, label, tone}], split: {a: {label, pct, tone}, b: {label, tone}, note}, list_title, list: [{name, value, tone}], rows, foot}`; `columns` for `rows` |
+| `heat` | labelled grid of shaded boxes (e.g. size × leverage) | `field` → `{cols: [..], rows: [{label, sub, cells: [{value, sub, ret} \| null]}], max?}`, `cell_height` |
+
+More options: `rows` items take `detail` (second line) and `tone` (`warn`/`bad`/`good` dot); `bars` takes `colors`
+(green/red), `fill`, `label_width` and a `note` per item; `table` takes `dense`, column formats `bar` (diverging, `scale`),
+`hbar` and `pill` (with `<key>_tone`), `tone: true` (green/red by sign or `<key>_tone`), `sub_key` (small text after
+the value), and group rows `{_head: true, title, sub, chip, chip_tone}` / `{_note: true, label, text}`; `cells` with
+`sections: true` takes `[{name, summary, cells: [{label, value, sub, ret, open, icon}], waiting: [label]}]` (fixed-size
+boxes shaded by `ret` up to `shade_max`, `per_row`, `cell_width`). Tones: `pos`, `neg`, `warn`, `long`, `short`.
+A page may add `"strip": {"field": "..."}`: a status bar above the grid, `{tone, title, text, groups: [[{value, label,
+tone}]], right}`.
 
 Every tile also takes `title`, `w`, `h`, `head` / `head_field` (top-right text) and `dim_field` (truthy =
 the tile is greyed out and loses its alert color, e.g. last week's numbers shown between events). `field` is a dotted path
