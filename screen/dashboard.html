@@ -92,6 +92,11 @@
   .dots { position: fixed; left: 50%; bottom: calc(14 * var(--u)); transform: translateX(-50%); display: flex; gap: calc(10 * var(--u)); z-index: 1; }
   .dots i { width: calc(8 * var(--u)); height: calc(8 * var(--u)); border-radius: calc(4 * var(--u)); background: var(--dim); transition: background .4s; }
   .dots i.on { background: #fff; }
+  /* touch: swipe left/right between pages (vertical scrolling stays native) */
+  html { touch-action: pan-y pinch-zoom; }
+  .page.in-l { animation: in-l .32s ease-out; } .page.in-r { animation: in-r .32s ease-out; }
+  @keyframes in-l { from { transform: translateX(calc(-60 * var(--u))); opacity: 0; } }
+  @keyframes in-r { from { transform: translateX(calc(60 * var(--u))); opacity: 0; } }
   .tall { grid-row: span 2; }
   .agenda { gap: calc(6 * var(--u)); }
   .ag { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: calc(26 * var(--u)); margin-top: calc(18 * var(--u));
@@ -484,6 +489,24 @@ function flip(dir, manual) {
   showPage(to);
   if (manual) pausedUntil = Date.now() + 120000;   // a manual flip holds the page for 2 minutes
 }
+/* swipe on touchscreens: flips this device only (the TV lock is left alone), holds the page like a manual flip */
+let sw = null;
+addEventListener("touchstart", e => {
+  const t = e.touches[0];
+  sw = e.touches.length === 1 && mode === "dashboard" && !e.target.closest(".dock, .tbl, pre") ? {x: t.clientX, y: t.clientY, at: Date.now()} : null;
+}, {passive: true});
+addEventListener("touchend", e => {
+  if (!sw) return;
+  const t = e.changedTouches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y, a = avail();
+  const ok = Math.abs(dx) > 60 && Math.abs(dx) > 1.6 * Math.abs(dy) && Date.now() - sw.at < 800 && a.length > 1;
+  sw = null; if (!ok) return;
+  const dir = dx < 0 ? 1 : -1, to = a[(Math.max(0, a.indexOf(page)) + dir + a.length) % a.length];
+  showPage(to); pausedUntil = Date.now() + 120000;
+  const el = document.querySelector(`.page[data-page="${to}"]`);
+  el.classList.remove("in-l", "in-r"); void el.offsetWidth; el.classList.add(dir > 0 ? "in-r" : "in-l");
+  scrollTo({top: 0});
+}, {passive: true});
+addEventListener("animationend", e => e.target.classList.remove("in-l", "in-r"));
 setInterval(() => {
   const every = +CFG.page_seconds || 0;
   if (lock !== "auto" || !every || avail().length < 2 || mode !== "dashboard" || document.body.classList.contains("remote") || Date.now() < pausedUntil) return;
