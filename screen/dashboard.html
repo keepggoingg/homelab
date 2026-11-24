@@ -17,8 +17,8 @@
   .grid { height: 100%; padding: calc(40 * var(--u)); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: calc(24 * var(--u)); }
   .tile { background: var(--tile); border-radius: var(--r); padding: calc(40 * var(--u)); display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
   .wide { grid-column: span 2; }
-  .head { display: flex; justify-content: space-between; align-items: center; gap: calc(16 * var(--u)); }
-  .title { font-size: calc(26 * var(--u)); font-weight: 700; }
+  .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: calc(6 * var(--u)) calc(16 * var(--u)); }
+  .title { font-size: calc(26 * var(--u)); font-weight: 700; white-space: nowrap; }
   .sub { font-size: calc(22 * var(--u)); color: var(--mute); }
 
   .clock-tile { padding: calc(48 * var(--u)) calc(56 * var(--u)); justify-content: space-between; }
@@ -50,11 +50,12 @@
   .ring .r b { width: calc(92 * var(--u)); height: calc(92 * var(--u)); border-radius: calc(46 * var(--u)); background: var(--tile); display: flex; align-items: center; justify-content: center; font-size: calc(26 * var(--u)); font-weight: 700; color: #fff; }
 
   .list { display: flex; flex-direction: column; gap: calc(16 * var(--u)); margin-top: calc(22 * var(--u)); }
-  .row { display: flex; justify-content: space-between; align-items: center; gap: calc(12 * var(--u)); font-size: calc(24 * var(--u)); white-space: nowrap; }
-  .row span:first-child { display: flex; align-items: center; gap: calc(14 * var(--u)); overflow: hidden; text-overflow: ellipsis; }
-  .row span:first-child::before { content: ""; flex: none; width: calc(12 * var(--u)); height: calc(12 * var(--u)); border-radius: calc(6 * var(--u)); background: #fff; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: calc(12 * var(--u)); font-size: calc(24 * var(--u)); }
+  .row span:first-child { position: relative; flex: 1 1 0; min-width: 0; padding-left: calc(26 * var(--u)); overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }   /* long names wrap to 2 lines, then … */
+  .row span:first-child::before { content: ""; position: absolute; left: 0; top: calc((1lh - 12 * var(--u)) / 2); width: calc(12 * var(--u)); height: calc(12 * var(--u)); border-radius: calc(6 * var(--u)); background: #fff; }
   .row.off span:first-child::before { background: var(--dim); }
-  .row span:last-child { color: var(--mute); font-size: calc(22 * var(--u)); }
+  .row span:last-child { flex: none; max-width: 55%; color: var(--mute); font-size: calc(22 * var(--u)); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .claude { padding: calc(40 * var(--u)) calc(48 * var(--u)); gap: calc(16 * var(--u)); }
   .claude .dot { width: calc(14 * var(--u)); height: calc(14 * var(--u)); border-radius: calc(7 * var(--u)); background: var(--dim); }
@@ -132,7 +133,7 @@
   .tbl .num { text-align: right; } .tbl tr.dim td { color: var(--mute); }
   .tile.stale .b-body, .tile.stale .head .sub { opacity: .4; } .tile.stale .big.alert { color: inherit; }
   .b-line .b-body svg { width: 100%; height: 100%; display: block; }
-  .legend { display: flex; gap: calc(22 * var(--u)); font-size: calc(20 * var(--u)); color: var(--mute); white-space: nowrap; }
+  .legend { display: flex; flex-wrap: wrap; gap: calc(4 * var(--u)) calc(22 * var(--u)); font-size: calc(20 * var(--u)); color: var(--mute); white-space: nowrap; }
   .legend i { display: inline-block; width: calc(22 * var(--u)); height: calc(4 * var(--u)); border-radius: 2px; margin-right: calc(9 * var(--u)); vertical-align: middle; }
   .bar { display: grid; grid-template-columns: calc(170 * var(--u)) 1fr calc(120 * var(--u)); gap: calc(16 * var(--u)); align-items: center; font-size: calc(24 * var(--u)); padding: calc(7 * var(--u)) 0; }
   .bar .trk { height: calc(14 * var(--u)); position: relative; } .bar .trk::before { content: ""; position: absolute; left: 50%; top: calc(-6 * var(--u)); bottom: calc(-6 * var(--u)); width: 2px; background: #333; }
@@ -556,8 +557,8 @@ function niceTicks(lo, hi, n) {
   const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-12; v += step) out.push(+v.toFixed(10));
   return out;
 }
-function timeTicks(x0, x1) {          // epoch seconds -> ticks on whole local hours, about 5 of them
-  const step = [3600, 7200, 10800, 21600, 43200, 86400].find(s => (x1 - x0) / s <= 6) || 172800;
+function timeTicks(x0, x1, maxN = 6) {   // epoch seconds -> ticks on whole local hours, at most maxN of them
+  const step = [3600, 7200, 10800, 21600, 43200, 86400].find(s => (x1 - x0) / s <= maxN) || 172800;
   const off = -new Date(x0 * 1000).getTimezoneOffset() * 60, out = [];
   for (let v = Math.ceil((x0 + off) / step) * step - off; v <= x1; v += step) out.push(v);
   return out;
@@ -575,7 +576,8 @@ function lineSvg(el, c, t) {
   const pad = (y1 - y0) * .08; y0 -= pad; y1 += pad;
   const X = v => L + (v - x0) / (x1 - x0) * (W - L - R), Y = v => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
   const xl = c.x_format || "daytime", timeAxis = xl === "daytime" || xl === "time";
-  const yt = niceTicks(y0, y1, 4), xt = timeAxis ? timeTicks(x0, x1) : niceTicks(x0, x1, 5);
+  const labW = (xl === "daytime" ? 9 : 5) * 11 + 28, maxN = Math.max(1, Math.floor((W - L - R) / labW));   // no overlapping x labels
+  const yt = niceTicks(y0, y1, 4), xt = timeAxis ? timeTicks(x0, x1, maxN) : niceTicks(x0, x1, Math.min(5, maxN));
   let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t.title || "chart")}">`;
   s += yt.map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 0 ? "#4a4a4a" : "#262626"}" stroke-width="${v === 0 ? 2 : 1}"/>`
     + `<text x="${L - 14}" y="${Y(v) + 7}" fill="#9a9a9a" font-size="20" text-anchor="end">${esc(fmt(v, c.y_format, c.y_digits ?? 1))}</text>`).join("");
