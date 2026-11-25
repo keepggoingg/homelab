@@ -14,6 +14,7 @@ cloudflared/cert.pem
 .git-private/
 CLAUDE.private.md
 apps/docs/site/
+apps/site/html/
 apps/n8n/workflows/
 apps/upwork-agent/
 private/
