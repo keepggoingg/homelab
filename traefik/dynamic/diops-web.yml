@@ -1,0 +1,17 @@
+# diops-bots results site (user service `dbots web` on the host, :8097) on a public hostname.
+# Off unless DIOPS_WEB_HOST is set in config/homelab.env. Set it ONLY after a Cloudflare Access app
+# protects that hostname; the app also verifies the Access JWT itself (diopsbots/web/cfaccess.py).
+# ufw must allow the proxy network to 8097.
+{{ $host := env "DIOPS_WEB_HOST" }}
+{{ if $host }}
+http:
+  routers:
+    diops-web:
+      rule: Host(`{{ $host }}`)
+      service: diops-web
+  services:
+    diops-web:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:8097
+{{ end }}

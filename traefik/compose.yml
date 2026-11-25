@@ -24,6 +24,7 @@ services:
       - ./dynamic:/dynamic:ro
     environment:
       SCREEN_REMOTE_HOST: ${SCREEN_REMOTE_HOST:-}
+      DIOPS_WEB_HOST: ${DIOPS_WEB_HOST:-}
     extra_hosts:
       - host.docker.internal:host-gateway
     networks: [proxy]
